@@ -24,18 +24,12 @@ import {
 } from "@wso2/oxygen-ui";
 import { onboardingApi } from "../api";
 import { Can } from "../authz/gates";
-import { LoadFailed, Loading, SectionHeader, planStatusChip } from "../components/Common";
+import { LoadFailed, Loading, SectionHeader, planStatusChip, taskStatusChip } from "../components/Common";
 import { TaskDialog, type TaskValues } from "../components/TaskDialog";
 import type { components } from "../generated/onboarding-api";
 import { ApiProblem, ensureOk, fetchAll, messageOf, unwrap, useLoad } from "../lib/api-helpers";
 
 type Task = components["schemas"]["Task"];
-
-function taskStatusChip(t: Task): ReactElement {
-  if (t.status === "done") return <Chip size="small" color="success" label="Done" />;
-  if (t.daysOverdue > 0) return <Chip size="small" color="error" label={`${t.daysOverdue} days overdue`} />;
-  return <Chip size="small" variant="outlined" label="To do" />;
-}
 
 export function PlanDetailPage(): ReactElement {
   const { plan: planId = "" } = useParams();
@@ -280,7 +274,16 @@ export function PlanDetailPage(): ReactElement {
                         <ListingTable.Cell>{t.department}</ListingTable.Cell>
                         <ListingTable.Cell>{t.dueDate}</ListingTable.Cell>
                         <ListingTable.Cell>{t.claimedBy ?? "Nobody yet"}</ListingTable.Cell>
-                        <ListingTable.Cell>{taskStatusChip(t)}</ListingTable.Cell>
+                        <ListingTable.Cell>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            {taskStatusChip(t)}
+                            {t.status === "done" && t.completedBy ? (
+                              <Typography variant="caption" color="text.secondary">
+                                {`by ${t.completedBy}`}
+                              </Typography>
+                            ) : null}
+                          </Stack>
+                        </ListingTable.Cell>
                         <ListingTable.Cell align="right">
                           {active ? (
                             <ListingTable.RowActions visibility="always" align="right">

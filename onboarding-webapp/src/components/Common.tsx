@@ -57,3 +57,9 @@ export function planStatusChip(status: "active" | "cancelled"): ReactElement {
     <Chip size="small" variant="outlined" label="Cancelled" />
   );
 }
+
+export function taskStatusChip(t: { status: "todo" | "done"; daysOverdue: number }): ReactElement {
+  if (t.status === "done") return <Chip size="small" color="success" label="Done" />;
+  if (t.daysOverdue > 0) return <Chip size="small" color="error" label={`${t.daysOverdue} days overdue`} />;
+  return <Chip size="small" variant="outlined" label="To do" />;
+}

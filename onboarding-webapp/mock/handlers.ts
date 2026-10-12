@@ -21,7 +21,7 @@ function roleOf(header: string | null): string {
 const people: Record<string, Me> = {
   "HR Coordinator": { username: "test-hr-coordinator", displayName: "Grace Liu", department: null },
   "IT Task Owner": { username: "test-it-task-owner", displayName: "Sam Torres", department: "IT" },
-  "HR Task Owner": { username: "test-hr-task-owner", displayName: "Priya Nair", department: "HR" },
+  "HR Task Owner": { username: "test-hr-task-owner", displayName: "Hana Ito", department: "HR" },
   "Facilities Task Owner": { username: "test-facilities-task-owner", displayName: "Omar Haddad", department: "Facilities" },
 };
 
@@ -49,6 +49,7 @@ interface StoredTask {
   status: "todo" | "done";
   claimedBy: string | null;
   completedBy: string | null;
+  completedAt: string | null;
   note: string | null;
 }
 
@@ -61,7 +62,18 @@ const seedTask = (
   status: "todo" | "done",
   claimedBy: string | null,
   note: string | null = null,
-): StoredTask => ({ id, planId, title, department, dueOffsetDays, status, claimedBy, completedBy: status === "done" ? claimedBy : null, note });
+): StoredTask => ({
+  id,
+  planId,
+  title,
+  department,
+  dueOffsetDays,
+  status,
+  claimedBy,
+  completedBy: status === "done" ? claimedBy : null,
+  completedAt: status === "done" ? "2026-01-09T09:00:00Z" : null,
+  note,
+});
 
 const storedTasks: StoredTask[] = [
   seedTask("task-1", "plan-1", "Set up laptop", "IT", -3, "todo", "Sam Torres"),
@@ -94,7 +106,7 @@ const newId = (prefix: string): string => `${prefix}-${nextId++}`;
 const problem = (status: number, message: string, description?: string): Response =>
   HttpResponse.json({ code: status, message, ...(description ? { description } : {}) }, { status });
 
-function toTask(t: StoredTask): Task {
+function toTask(t: StoredTask, caller?: Me): Task {
   const plan = plans.find((p) => p.id === t.planId)!;
   const dueDate = addDays(plan.startDate, t.dueOffsetDays);
   const late = t.status === "todo" ? toDay(todayIso()) - toDay(dueDate) : 0;
@@ -109,15 +121,15 @@ function toTask(t: StoredTask): Task {
     status: t.status,
     daysOverdue: late > 0 ? late : 0,
     claimedBy: t.claimedBy,
-    claimedByMe: false,
+    claimedByMe: caller !== undefined && t.claimedBy !== null && t.claimedBy === caller.displayName,
     completedBy: t.completedBy,
-    completedAt: t.status === "done" ? `${addDays(plan.startDate, t.dueOffsetDays)}T09:00:00Z` : null,
+    completedAt: t.completedAt,
     note: t.note,
   };
 }
 
 function summarize(plan: Plan): PlanSummary {
-  const mine = storedTasks.filter((t) => t.planId === plan.id).map(toTask);
+  const mine = storedTasks.filter((t) => t.planId === plan.id).map((t) => toTask(t));
   const open = mine.filter((t) => t.status === "todo");
   const count = (d: Department): number => open.filter((t) => t.department === d).length;
   return {
@@ -149,7 +161,75 @@ function readTaskBody(body: unknown): { title: string; department: Department; d
 
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
 
+const callerOf = (request: Request): Me | undefined => people[roleOf(request.headers.get("authorization"))];
+
+/** The caller's department task: 404 when it is not found, in another department or in a cancelled plan. */
+function departmentTask(request: Request, taskId: unknown): { task: StoredTask; caller: Me } | Response {
+  const caller = callerOf(request);
+  if (!caller?.department) return problem(403, "Forbidden", "The caller has no department");
+  const task = storedTasks.find((t) => t.id === taskId);
+  const plan = task ? plans.find((p) => p.id === task.planId) : undefined;
+  if (!task || !plan || plan.status !== "active" || task.department !== caller.department) return problem(404, "Task not found");
+  return { task, caller };
+}
+
 export const handlers = [
+  http.get("/api/me/department/tasks", ({ request }) => {
+    const url = new URL(request.url);
+    const caller = callerOf(request);
+    if (!caller?.department) return problem(403, "Forbidden", "The caller has no department");
+    const status = url.searchParams.get("status") ?? "todo";
+    if (!["todo", "done", "all"].includes(status)) return problem(400, "Invalid status", "status must be todo, done or all");
+    const list = storedTasks
+      .filter((t) => t.department === caller.department && plans.find((p) => p.id === t.planId)?.status === "active")
+      .map((t) => toTask(t, caller))
+      .filter((t) => status === "all" || t.status === status)
+      .filter((t) => url.searchParams.get("overdue") !== "true" || t.daysOverdue > 0)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    return HttpResponse.json(page(url, list));
+  }),
+  http.get("/api/me/department/tasks/:taskId", ({ params, request }) => {
+    const hit = departmentTask(request, params.taskId);
+    return hit instanceof Response ? hit : HttpResponse.json(toTask(hit.task, hit.caller));
+  }),
+  http.post("/api/me/department/tasks/:taskId/claim", ({ params, request }) => {
+    const hit = departmentTask(request, params.taskId);
+    if (hit instanceof Response) return hit;
+    hit.task.claimedBy = hit.caller.displayName;
+    return HttpResponse.json(toTask(hit.task, hit.caller));
+  }),
+  http.post("/api/me/department/tasks/:taskId/release", ({ params, request }) => {
+    const hit = departmentTask(request, params.taskId);
+    if (hit instanceof Response) return hit;
+    if (hit.task.claimedBy === hit.caller.displayName) hit.task.claimedBy = null;
+    return HttpResponse.json(toTask(hit.task, hit.caller));
+  }),
+  http.post("/api/me/department/tasks/:taskId/complete", ({ params, request }) => {
+    const hit = departmentTask(request, params.taskId);
+    if (hit instanceof Response) return hit;
+    if (hit.task.status !== "done") {
+      hit.task.status = "done";
+      hit.task.completedBy = hit.caller.displayName;
+      hit.task.completedAt = new Date().toISOString();
+    }
+    return HttpResponse.json(toTask(hit.task, hit.caller));
+  }),
+  http.post("/api/me/department/tasks/:taskId/reopen", ({ params, request }) => {
+    const hit = departmentTask(request, params.taskId);
+    if (hit instanceof Response) return hit;
+    hit.task.status = "todo";
+    hit.task.completedBy = null;
+    hit.task.completedAt = null;
+    return HttpResponse.json(toTask(hit.task, hit.caller));
+  }),
+  http.put("/api/me/department/tasks/:taskId/note", async ({ params, request }) => {
+    const hit = departmentTask(request, params.taskId);
+    if (hit instanceof Response) return hit;
+    const b = (await request.json()) as Record<string, unknown>;
+    if (typeof b.note !== "string") return problem(400, "Invalid note", "note is required");
+    hit.task.note = b.note.trim() === "" ? null : b.note.trim();
+    return HttpResponse.json(toTask(hit.task, hit.caller));
+  }),
   http.get("/api/plans", ({ request }) => {
     const url = new URL(request.url);
     const includeClosed = url.searchParams.get("includeClosed") === "true";
@@ -176,7 +256,7 @@ export const handlers = [
     };
     plans.push(plan);
     for (const t of template) {
-      storedTasks.push({ id: newId("task"), planId: plan.id, title: t.title, department: t.department, dueOffsetDays: t.dueOffsetDays, status: "todo", claimedBy: null, completedBy: null, note: null });
+      storedTasks.push({ id: newId("task"), planId: plan.id, title: t.title, department: t.department, dueOffsetDays: t.dueOffsetDays, status: "todo", claimedBy: null, completedBy: null, completedAt: null, note: null });
     }
     return HttpResponse.json(summarize(plan), { status: 201 });
   }),
@@ -207,7 +287,7 @@ export const handlers = [
   }),
   http.get("/api/plans/:planId/tasks", ({ params, request }) => {
     if (!plans.some((p) => p.id === params.planId)) return problem(404, "Plan not found");
-    return HttpResponse.json(page(new URL(request.url), storedTasks.filter((t) => t.planId === params.planId).map(toTask)));
+    return HttpResponse.json(page(new URL(request.url), storedTasks.filter((t) => t.planId === params.planId).map((t) => toTask(t))));
   }),
   http.post("/api/plans/:planId/tasks", async ({ params, request }) => {
     const plan = plans.find((p) => p.id === params.planId);
@@ -215,7 +295,7 @@ export const handlers = [
     if (plan.status !== "active") return problem(400, "Plan is cancelled", "Tasks can only be added to an active plan");
     const body = readTaskBody(await request.json());
     if (body instanceof Response) return body;
-    const task: StoredTask = { id: newId("task"), planId: plan.id, ...body, status: "todo", claimedBy: null, completedBy: null, note: null };
+    const task: StoredTask = { id: newId("task"), planId: plan.id, ...body, status: "todo", claimedBy: null, completedBy: null, completedAt: null, note: null };
     storedTasks.push(task);
     return HttpResponse.json(toTask(task), { status: 201 });
   }),

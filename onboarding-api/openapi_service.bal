@@ -67,8 +67,24 @@ service http:InterceptableService / on ep0 {
     # http:Ok (A page of the department's tasks.)
     # http:BadRequest (The request is invalid.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
-    resource function get me/department/tasks("todo"|"done"|"all" status = "todo", boolean overdue = false, int 'limit = 20, int offset = 0) returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function get me/department/tasks(http:RequestContext ctx, http:Request req, "todo"|"done"|"all" status = "todo", boolean overdue = false, int 'limit = 20, int offset = 0) returns TaskList|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        TaskList|ApiProblem|error result = listDepartmentTasks(actor, status, overdue, 'limit, offset);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return result;
     }
 
     # One task of the caller's department
@@ -77,8 +93,24 @@ service http:InterceptableService / on ep0 {
     # http:Ok (The task.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
     # http:NotFound (The record does not exist, or is not the caller's to see.)
-    resource function get me/department/tasks/[string taskId]() returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function get me/department/tasks/[string taskId](http:RequestContext ctx, http:Request req) returns TaskOk|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        Task|ApiProblem|error result = fetchDepartmentTask(actor, taskId);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return <TaskOk>{body: result};
     }
 
     # Every plan with its progress
@@ -184,8 +216,24 @@ service http:InterceptableService / on ep0 {
     # http:Ok (The task, now claimed by the caller.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
     # http:NotFound (The record does not exist, or is not the caller's to see.)
-    resource function post me/department/tasks/[string taskId]/claim() returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function post me/department/tasks/[string taskId]/claim(http:RequestContext ctx, http:Request req) returns TaskOk|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        Task|ApiProblem|error result = claimTaskFor(actor, taskId);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return <TaskOk>{body: result};
     }
 
     # Mark a task of the caller's department done
@@ -194,8 +242,24 @@ service http:InterceptableService / on ep0 {
     # http:Ok (The task, done, with who completed it and when.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
     # http:NotFound (The record does not exist, or is not the caller's to see.)
-    resource function post me/department/tasks/[string taskId]/complete() returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function post me/department/tasks/[string taskId]/complete(http:RequestContext ctx, http:Request req) returns TaskOk|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        Task|ApiProblem|error result = completeTaskFor(actor, taskId);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return <TaskOk>{body: result};
     }
 
     # Release a task the caller claimed
@@ -204,8 +268,24 @@ service http:InterceptableService / on ep0 {
     # http:Ok (The task, now unclaimed.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
     # http:NotFound (The record does not exist, or is not the caller's to see.)
-    resource function post me/department/tasks/[string taskId]/release() returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function post me/department/tasks/[string taskId]/release(http:RequestContext ctx, http:Request req) returns TaskOk|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        Task|ApiProblem|error result = releaseTaskFor(actor, taskId);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return <TaskOk>{body: result};
     }
 
     # Reopen a task marked done by mistake
@@ -214,8 +294,24 @@ service http:InterceptableService / on ep0 {
     # http:Ok (The task, back to to do.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
     # http:NotFound (The record does not exist, or is not the caller's to see.)
-    resource function post me/department/tasks/[string taskId]/reopen() returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function post me/department/tasks/[string taskId]/reopen(http:RequestContext ctx, http:Request req) returns TaskOk|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        Task|ApiProblem|error result = reopenTaskFor(actor, taskId);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return <TaskOk>{body: result};
     }
 
     # Create a plan, copying the standard template's tasks into it
@@ -292,8 +388,24 @@ service http:InterceptableService / on ep0 {
     # http:BadRequest (The request is invalid.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
     # http:NotFound (The record does not exist, or is not the caller's to see.)
-    resource function put me/department/tasks/[string taskId]/note(@http:Payload TaskNote payload) returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function put me/department/tasks/[string taskId]/note(http:RequestContext ctx, http:Request req, @http:Payload TaskNote payload) returns TaskOk|ErrorBadRequest|ErrorNotFound|http:Unauthorized|http:InternalServerError {
+        GatewayCaller|http:Unauthorized caller = requireGatewayCaller(ctx);
+        if caller !is GatewayCaller {
+            return caller;
+        }
+        Actor|http:Unauthorized actor = resolveActor(req, caller);
+        if actor !is Actor {
+            return actor;
+        }
+        Task|ApiProblem|error result = noteTaskFor(actor, taskId, payload);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return <TaskOk>{body: result};
     }
 
     # Change a task of an active plan

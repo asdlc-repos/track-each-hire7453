@@ -16,6 +16,8 @@ import { PlaceholderPage } from "./pages/Placeholder";
 import { PlansPage } from "./pages/Plans";
 import { PlanNewPage } from "./pages/PlanNew";
 import { PlanDetailPage } from "./pages/PlanDetail";
+import { MyTasksPage } from "./pages/MyTasks";
+import { TaskDetailPage } from "./pages/TaskDetail";
 import { TemplatePage } from "./pages/Template";
 
 /** Pages by screen key. Later items replace the placeholders one by one. */
@@ -24,10 +26,10 @@ const PAGE_BY_KEY: Record<string, ReactElement> = {
   plans: <PlansPage />,
   overdue: <PlaceholderPage screenKey="overdue" />,
   template: <TemplatePage />,
-  "my-tasks": <PlaceholderPage screenKey="my-tasks" />,
+  "my-tasks": <MyTasksPage />,
   "plan-new": <PlanNewPage />,
   "plan-detail": <PlanDetailPage />,
-  "task-detail": <PlaceholderPage screenKey="task-detail" />,
+  "task-detail": <TaskDetailPage />,
   account: <AccountPage />,
   "signed-out": <SignedOutPage />,
 };
