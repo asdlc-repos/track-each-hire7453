@@ -22,6 +22,7 @@ Needs: F1.
 - Any member of the owning department can claim a task and mark it done, whether or not they claimed it.
 - A task has two statuses: to do and done.
 - Completion is recorded with who marked it done and when.
+- The HR coordinator sees every task but does not claim or complete them; HR department tasks are done by HR task owners. *assumed*
 
 ## Out of Scope
 

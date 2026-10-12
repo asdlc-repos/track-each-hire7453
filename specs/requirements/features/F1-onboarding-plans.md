@@ -19,3 +19,5 @@ HR creates an onboarding plan for each new hire: their details, start date and t
 - There is one standard template, copied into each new plan; later template edits do not change existing plans.
 - Each template task has a due date expressed as a number of days before or after the start date.
 - The manager is recorded as a name on the plan only; the manager does not sign in.
+- The standard template starts empty; the HR coordinator builds its checklist. *assumed*
+- Cancelling a plan keeps it in the plans list but removes its tasks from every task list and reminder. *assumed*

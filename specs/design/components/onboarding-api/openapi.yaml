@@ -1,0 +1,616 @@
+openapi: 3.0.3
+info:
+  title: Onboarding API
+  version: 0.1.0
+  description: "Onboarding plans, plan tasks, the standard checklist template, department task lists and overdue reminders."
+servers:
+  - url: /
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth2/authorize
+          tokenUrl: /oauth2/token
+          scopes:
+            plans:read-all: "Every onboarding plan, with its progress and tasks"
+            plans:manage: "Create, change and cancel any plan, and edit its tasks"
+            template:read: "See the standard checklist"
+            template:manage: "Change the standard checklist"
+            tasks:read: "Tasks of the caller's own department"
+            tasks:read-all: "Every task of every active plan"
+            tasks:claim: "Claim or release a task of the caller's department"
+            tasks:complete: "Mark a task of the caller's department done or reopen it"
+            tasks:note: "Write the note on a task of the caller's department"
+  parameters:
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+    offset:
+      name: offset
+      in: query
+      schema: { type: integer, default: 0, minimum: 0 }
+    planId:
+      name: planId
+      in: path
+      required: true
+      schema: { type: string }
+    taskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string }
+    templateTaskId:
+      name: templateTaskId
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: "The request is invalid."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: "Missing or invalid credentials, or the permission is not held."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: "The record does not exist, or is not the caller's to see."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: integer, description: "HTTP or application error code" }
+        message: { type: string, description: "short human-readable label" }
+        description: { type: string, description: "detailed explanation" }
+        moreInfo: { type: string, description: "URI to documentation" }
+    Department:
+      type: string
+      enum: [IT, HR, Facilities]
+    Me:
+      type: object
+      required: [username, displayName]
+      properties:
+        username: { type: string }
+        displayName: { type: string }
+        department:
+          allOf:
+            - $ref: '#/components/schemas/Department'
+          nullable: true
+          description: "The caller's task department, or null for the HR coordinator"
+    Plan:
+      type: object
+      required: [id, hireName, jobTitle, department, managerName, startDate, status]
+      properties:
+        id: { type: string }
+        hireName: { type: string }
+        jobTitle: { type: string }
+        department: { type: string, description: "The hire's own department, free text" }
+        managerName: { type: string }
+        startDate: { type: string, format: date }
+        status: { type: string, enum: [active, cancelled] }
+    DepartmentCounts:
+      type: object
+      required: [IT, HR, Facilities]
+      properties:
+        IT: { type: integer }
+        HR: { type: integer }
+        Facilities: { type: integer }
+    PlanSummary:
+      type: object
+      required: [id, hireName, jobTitle, department, managerName, startDate, status, totalTasks, doneTasks, overdueTasks, outstandingByDepartment, complete]
+      properties:
+        id: { type: string }
+        hireName: { type: string }
+        jobTitle: { type: string }
+        department: { type: string }
+        managerName: { type: string }
+        startDate: { type: string, format: date }
+        status: { type: string, enum: [active, cancelled] }
+        totalTasks: { type: integer }
+        doneTasks: { type: integer }
+        overdueTasks: { type: integer }
+        outstandingByDepartment: { $ref: '#/components/schemas/DepartmentCounts' }
+        complete: { type: boolean, description: "True when the plan has tasks and all are done" }
+    PlanSummaryList:
+      type: object
+      required: [count, data]
+      properties:
+        count: { type: integer, description: "total matching items" }
+        next: { type: string, nullable: true }
+        previous: { type: string, nullable: true }
+        data: { type: array, items: { $ref: '#/components/schemas/PlanSummary' } }
+    NewPlan:
+      type: object
+      required: [hireName, jobTitle, department, managerName, startDate]
+      properties:
+        hireName: { type: string }
+        jobTitle: { type: string }
+        department: { type: string }
+        managerName: { type: string }
+        startDate: { type: string, format: date }
+    PlanChange:
+      type: object
+      properties:
+        hireName: { type: string }
+        jobTitle: { type: string }
+        department: { type: string }
+        managerName: { type: string }
+        startDate: { type: string, format: date, description: "Changing it recomputes every task's due date" }
+    Task:
+      type: object
+      required: [id, planId, hireName, title, department, dueOffsetDays, dueDate, status, daysOverdue, claimedByMe]
+      properties:
+        id: { type: string }
+        planId: { type: string }
+        hireName: { type: string }
+        title: { type: string }
+        department: { $ref: '#/components/schemas/Department' }
+        dueOffsetDays: { type: integer, description: "Days from the start date; negative is before" }
+        dueDate: { type: string, format: date }
+        status: { type: string, enum: [todo, done] }
+        daysOverdue: { type: integer, description: "0 unless the task is to do and past its due date" }
+        claimedBy: { type: string, nullable: true, description: "Display name of whoever claimed it" }
+        claimedByMe: { type: boolean, description: "True when the caller claimed it; false on every-row views" }
+        completedBy: { type: string, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+    TaskList:
+      type: object
+      required: [count, data]
+      properties:
+        count: { type: integer, description: "total matching items" }
+        next: { type: string, nullable: true }
+        previous: { type: string, nullable: true }
+        data: { type: array, items: { $ref: '#/components/schemas/Task' } }
+    NewPlanTask:
+      type: object
+      required: [title, department, dueOffsetDays]
+      properties:
+        title: { type: string }
+        department: { $ref: '#/components/schemas/Department' }
+        dueOffsetDays: { type: integer }
+    PlanTaskChange:
+      type: object
+      properties:
+        title: { type: string }
+        department: { $ref: '#/components/schemas/Department' }
+        dueOffsetDays: { type: integer }
+    TaskNote:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string }
+    TemplateTask:
+      type: object
+      required: [id, title, department, dueOffsetDays]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        department: { $ref: '#/components/schemas/Department' }
+        dueOffsetDays: { type: integer }
+    TemplateTaskList:
+      type: object
+      required: [count, data]
+      properties:
+        count: { type: integer }
+        next: { type: string, nullable: true }
+        previous: { type: string, nullable: true }
+        data: { type: array, items: { $ref: '#/components/schemas/TemplateTask' } }
+    NewTemplateTask:
+      type: object
+      required: [title, department, dueOffsetDays]
+      properties:
+        title: { type: string }
+        department: { $ref: '#/components/schemas/Department' }
+        dueOffsetDays: { type: integer }
+security:
+  - oauth2: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: "Liveness check"
+      security: []
+      responses:
+        '200':
+          description: "The service is up."
+  /me:
+    get:
+      operationId: getMe
+      summary: "The signed-in caller and their task department"
+      responses:
+        '200':
+          description: "The caller."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /plans:
+    get:
+      operationId: listPlans
+      summary: "Every plan with its progress"
+      security:
+        - oauth2: [plans:read-all]
+      parameters:
+        - name: includeClosed
+          in: query
+          description: "When true, completed and cancelled plans are included; by default only active, unfinished plans"
+          schema: { type: boolean, default: false }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [startDate, overdueTasks], default: startDate }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: "A page of plan summaries."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanSummaryList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createPlan
+      summary: "Create a plan, copying the standard template's tasks into it"
+      security:
+        - oauth2: [plans:manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewPlan' }
+      responses:
+        '201':
+          description: "The new plan."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /plans/{planId}:
+    parameters:
+      - $ref: '#/components/parameters/planId'
+    get:
+      operationId: getPlan
+      summary: "One plan with its progress"
+      security:
+        - oauth2: [plans:read-all]
+      responses:
+        '200':
+          description: "The plan."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updatePlan
+      summary: "Change a plan's details; a new start date shifts every due date"
+      security:
+        - oauth2: [plans:manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanChange' }
+      responses:
+        '200':
+          description: "The updated plan."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /plans/{planId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/planId'
+    post:
+      operationId: cancelPlan
+      summary: "Cancel a plan; its tasks leave task lists and reminders"
+      security:
+        - oauth2: [plans:manage]
+      responses:
+        '200':
+          description: "The cancelled plan."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /plans/{planId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/planId'
+    get:
+      operationId: listPlanTasks
+      summary: "Every task of one plan"
+      security:
+        - oauth2: [plans:read-all]
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: "A page of the plan's tasks."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: addPlanTask
+      summary: "Add a task to an active plan"
+      security:
+        - oauth2: [plans:manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewPlanTask' }
+      responses:
+        '201':
+          description: "The new task."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /plans/{planId}/tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/planId'
+      - $ref: '#/components/parameters/taskId'
+    put:
+      operationId: updatePlanTask
+      summary: "Change a task of an active plan"
+      security:
+        - oauth2: [plans:manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanTaskChange' }
+      responses:
+        '200':
+          description: "The updated task."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: removePlanTask
+      summary: "Remove a task from an active plan"
+      security:
+        - oauth2: [plans:manage]
+      responses:
+        '204':
+          description: "The task was removed."
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks:
+    get:
+      operationId: listTasks
+      summary: "Every task of every active plan"
+      security:
+        - oauth2: [tasks:read-all]
+      parameters:
+        - name: overdue
+          in: query
+          description: "When true, only tasks to do and past their due date, most overdue first"
+          schema: { type: boolean, default: false }
+        - name: department
+          in: query
+          schema: { $ref: '#/components/schemas/Department' }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: "A page of tasks."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/department/tasks:
+    get:
+      operationId: listMyDepartmentTasks
+      summary: "The caller's department's tasks, soonest due first"
+      security:
+        - oauth2: [tasks:read]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [todo, done, all], default: todo }
+        - name: overdue
+          in: query
+          description: "When true, only overdue tasks; the count is the navigation's overdue number"
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: "A page of the department's tasks."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/department/tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    get:
+      operationId: getMyDepartmentTask
+      summary: "One task of the caller's department"
+      security:
+        - oauth2: [tasks:read]
+      responses:
+        '200':
+          description: "The task."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/department/tasks/{taskId}/claim:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    post:
+      operationId: claimTask
+      summary: "Claim a task of the caller's department"
+      security:
+        - oauth2: [tasks:claim]
+      responses:
+        '200':
+          description: "The task, now claimed by the caller."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/department/tasks/{taskId}/release:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    post:
+      operationId: releaseTask
+      summary: "Release a task the caller claimed"
+      security:
+        - oauth2: [tasks:claim]
+      responses:
+        '200':
+          description: "The task, now unclaimed."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/department/tasks/{taskId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    post:
+      operationId: completeTask
+      summary: "Mark a task of the caller's department done"
+      security:
+        - oauth2: [tasks:complete]
+      responses:
+        '200':
+          description: "The task, done, with who completed it and when."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/department/tasks/{taskId}/reopen:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    post:
+      operationId: reopenTask
+      summary: "Reopen a task marked done by mistake"
+      security:
+        - oauth2: [tasks:complete]
+      responses:
+        '200':
+          description: "The task, back to to do."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/department/tasks/{taskId}/note:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    put:
+      operationId: setTaskNote
+      summary: "Write the note on a task of the caller's department"
+      security:
+        - oauth2: [tasks:note]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskNote' }
+      responses:
+        '200':
+          description: "The task with its note."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /template-tasks:
+    get:
+      operationId: listTemplateTasks
+      summary: "The standard checklist"
+      security:
+        - oauth2: [template:read]
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: "A page of template tasks."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateTaskList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createTemplateTask
+      summary: "Add a task to the standard checklist"
+      security:
+        - oauth2: [template:manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewTemplateTask' }
+      responses:
+        '201':
+          description: "The new template task."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /template-tasks/{templateTaskId}:
+    parameters:
+      - $ref: '#/components/parameters/templateTaskId'
+    put:
+      operationId: updateTemplateTask
+      summary: "Change a template task; existing plans are untouched"
+      security:
+        - oauth2: [template:manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewTemplateTask' }
+      responses:
+        '200':
+          description: "The updated template task."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteTemplateTask
+      summary: "Remove a template task; existing plans are untouched"
+      security:
+        - oauth2: [template:manage]
+      responses:
+        '204':
+          description: "The template task was removed."
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
