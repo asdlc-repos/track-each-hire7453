@@ -31,3 +31,4 @@ See [Product-wide](product-wide.md).
 ## Open Questions
 
 1. Should hiring managers or new hires also sign in to see or complete tasks? Only the HR coordinator was named as an actor.
+

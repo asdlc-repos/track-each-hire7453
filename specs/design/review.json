@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "path": "specs/design/components/onboarding-webapp/prototype.json",
+      "checkedHash": "fe3dc54b0c576962f2329a60fa8cd9b39cdb996748e3c8f0a7bcc72eef55a847"
+    },
+    {
+      "path": "specs/design/security.json",
+      "checkedHash": "393c85d1688af66919c972209cc730c586059495289564e6647ccd802b21c6d9"
+    },
+    {
+      "path": "specs/design/design.cell",
+      "checkedHash": "600d4f1d86e19471644effea1c57a51e7f54f3d7e41e999bd3a6757230bf4a0b"
+    },
+    {
+      "path": "specs/design/domain-model.md",
+      "checkedHash": "57d87ae9cdaeb6e37f587248d2fc026dca888d9087064028c1bf2bba835a0aec"
+    },
+    {
+      "path": "specs/design/components/onboarding-api/openapi.yaml",
+      "checkedHash": "0af0fa8273c7a67b9e673876d8608b4e8ad47853f3a370278024a68e54a347be"
+    },
+    {
+      "path": "specs/design/decisions.md",
+      "checkedHash": "438e582f25fff060189820887d412f1ed1fd3bfe452ff84452588a9efe653956"
+    }
+  ]
+}
