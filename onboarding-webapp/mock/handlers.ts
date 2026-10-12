@@ -174,6 +174,19 @@ function departmentTask(request: Request, taskId: unknown): { task: StoredTask; 
 }
 
 export const handlers = [
+  http.get("/api/tasks", ({ request }) => {
+    const url = new URL(request.url);
+    const department = url.searchParams.get("department");
+    if (department !== null && !DEPARTMENTS.includes(department as Department)) return problem(400, "Invalid department", "department must be IT, HR or Facilities");
+    const overdueOnly = url.searchParams.get("overdue") === "true";
+    const list = storedTasks
+      .filter((t) => plans.find((p) => p.id === t.planId)?.status === "active")
+      .map((t) => toTask(t))
+      .filter((t) => department === null || t.department === department)
+      .filter((t) => !overdueOnly || t.daysOverdue > 0)
+      .sort((a, b) => b.daysOverdue - a.daysOverdue || a.dueDate.localeCompare(b.dueDate));
+    return HttpResponse.json(page(url, list));
+  }),
   http.get("/api/me/department/tasks", ({ request }) => {
     const url = new URL(request.url);
     const caller = callerOf(request);

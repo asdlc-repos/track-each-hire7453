@@ -13,6 +13,7 @@ import { CallbackPage } from "./pages/Callback";
 import { AccountPage } from "./pages/Account";
 import { SignedOutPage } from "./pages/SignedOut";
 import { PlaceholderPage } from "./pages/Placeholder";
+import { OverduePage } from "./pages/Overdue";
 import { PlansPage } from "./pages/Plans";
 import { PlanNewPage } from "./pages/PlanNew";
 import { PlanDetailPage } from "./pages/PlanDetail";
@@ -24,7 +25,7 @@ import { TemplatePage } from "./pages/Template";
 const PAGE_BY_KEY: Record<string, ReactElement> = {
   dashboard: <PlaceholderPage screenKey="dashboard" />,
   plans: <PlansPage />,
-  overdue: <PlaceholderPage screenKey="overdue" />,
+  overdue: <OverduePage />,
   template: <TemplatePage />,
   "my-tasks": <MyTasksPage />,
   "plan-new": <PlanNewPage />,

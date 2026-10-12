@@ -175,8 +175,16 @@ service http:InterceptableService / on ep0 {
     # http:Ok (A page of tasks.)
     # http:BadRequest (The request is invalid.)
     # http:Unauthorized (Missing or invalid credentials, or the permission is not held.)
-    resource function get tasks(Department? department, boolean overdue = false, int 'limit = 20, int offset = 0) returns http:NotImplemented {
-        return http:NOT_IMPLEMENTED;
+    resource function get tasks(Department? department, boolean overdue = false, int 'limit = 20, int offset = 0) returns TaskList|ErrorBadRequest|ErrorNotFound|http:InternalServerError {
+        TaskList|ApiProblem|error result = listAllTasks(overdue, department, 'limit, offset);
+        if result is ApiProblem {
+            return problemResponse(result);
+        }
+        if result is error {
+            log:printError("request failed", 'error = result);
+            return http:INTERNAL_SERVER_ERROR;
+        }
+        return result;
     }
 
     resource function get template\-tasks(int 'limit = 20, int offset = 0) returns TemplateTaskList|ErrorBadRequest|ErrorNotFound|http:InternalServerError {

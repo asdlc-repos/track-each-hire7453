@@ -6,6 +6,7 @@ import { Can } from "../authz/gates";
 import { SCREEN_ROUTES } from "../authz/screens";
 import { signOut } from "../authz/session";
 import { APP_NAME } from "../appName";
+import { useOverdueCounts } from "../lib/overdue";
 import { useMe } from "./Me";
 
 // The rail: one gated list. Labels are the prototype's nav labels.
@@ -31,6 +32,12 @@ export function AppLayout(): ReactElement {
   const { me } = useMe();
   const name = me?.displayName ?? "Signed in";
   const email = me?.username ?? "";
+  const overdue = useOverdueCounts(pathname);
+  const labelOf = (key: string, label: string): string => {
+    if (key === "overdue" && overdue.all) return `${label} (${overdue.all})`;
+    if (key === "my-tasks" && overdue.mine) return `${label} (${overdue.mine} overdue)`;
+    return label;
+  };
 
   return (
     <AppShell>
@@ -65,7 +72,7 @@ export function AppLayout(): ReactElement {
                   <Can key={item.key} op={screen.loads!}>
                     <Sidebar.Item id={item.key} link={<Link to={screen.path} />}>
                       <Sidebar.ItemIcon>{item.icon}</Sidebar.ItemIcon>
-                      <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
+                      <Sidebar.ItemLabel>{labelOf(item.key, item.label)}</Sidebar.ItemLabel>
                     </Sidebar.Item>
                   </Can>
                 );

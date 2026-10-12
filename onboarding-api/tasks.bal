@@ -148,3 +148,31 @@ function noteTaskFor(Actor actor, string taskId, TaskNote input) returns Task|Ap
     string? value = text == "" ? () : text;
     return changeDepartmentTask(actor, taskId, `UPDATE plan_tasks SET note = ${value}`);
 }
+
+# Every task of every active plan, for the HR coordinator. Overdue is computed
+# at read time; most overdue first equals soonest due first.
+function listAllTasks(boolean overdue, Department? department, int 'limit, int offset)
+        returns TaskList|ApiProblem|error {
+    ApiProblem? invalid = validPage('limit, offset);
+    if invalid is ApiProblem {
+        return invalid;
+    }
+    sql:ParameterizedQuery base = sql:queryConcat(`SELECT w.* FROM (`, taskSelect(),
+        `) w JOIN plan_tasks pt ON pt.id = w.id JOIN plans pl ON pl.id = pt.plan_id`);
+    sql:ParameterizedQuery filter = ` WHERE pl.status = 'active'`;
+    if overdue {
+        filter = sql:queryConcat(filter, ` AND w."daysOverdue" > 0`);
+    }
+    string extra = string `&overdue=${overdue}`;
+    if department is Department {
+        filter = sql:queryConcat(filter, ` AND w.department = ${department}`);
+        extra += string `&department=${department}`;
+    }
+    int total = check dbClient->queryRow(sql:queryConcat(`SELECT count(*) FROM (`, base, filter, `) c`));
+    stream<TaskRow, sql:Error?> rows = dbClient->query(sql:queryConcat(base, filter,
+        ` ORDER BY w."dueDate", pt.created_at, w.id LIMIT ${'limit} OFFSET ${offset}`));
+    Task[] data = check from TaskRow r in rows
+        select toTask(r);
+    [string?, string?] links = pageLinks("/tasks", extra, 'limit, offset, total);
+    return {count: total, next: links[0], previous: links[1], data};
+}
