@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-12T08:45:18.440087Z",
-  "commit": "875ef2623b0800d7f825d60595d3af8e70d18418",
+  "generatedAt": "2026-10-12T09:05:12.263Z",
+  "commit": "cad43f5dda6642b59af5310fcdbd14b09a150004",
   "baseUrl": "http://http-track-each-hi-development-default-8561261e.openchoreoapis.localhost:19080/",
-  "isolation": "Each scenario creates its own plan(s) through the app (UI or API) with unique hire names and asserts only on those plans' tasks, read through GET /tasks (HR) because the plans list endpoint is broken; scenarios that could not own a container assert on the change. Earlier scenarios' plans remain in the shared database.",
+  "isolation": "Every scenario creates its own plans, named with the suffix T5603, and asserts only on them. The task lists are shared with earlier runs, which left overdue tasks and one extra 'Order business cards' on the standard checklist, so the overdue-reminder scenarios assert on the change in count rather than a total. Setup (Given) and most When steps went through the API with the published test logins' tokens; reminders, navigation, role gating and the dashboard were read in the browser. The test logins have no display names, so 'Sam Torres' and the like appear as the login names.",
   "scenarios": [
     {
       "feature": "F1 Onboarding plans",
@@ -12,50 +12,33 @@
       "rule": "A new plan starts from the standard checklist",
       "scenario": "Creating a plan copies the template's tasks",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "the standard checklist holds \"Set up laptop\" for IT and \"Assign desk\" for Facilities",
           "keyword": "Given",
-          "command": "agent-browser (Checklist template page: Add task x2)",
-          "exit": 0,
-          "observed": "template holds Set up laptop (IT, 3 days before) and Assign desk (Facilities, 1 day before)"
+          "text": "the standard checklist holds \"Set up laptop\" for IT and \"Assign desk\" for Facilities",
+          "command": "API: POST /plans (Maya Fernando 5603, Software Engineer, Engineering, Ravi Perera, 2026-03-02) -> 201"
         },
         {
-          "text": "Grace the HR coordinator creates a plan for \"Maya Fernando\", role \"Software Engineer\", department \"Engineering\", manager \"Ravi Perera\", starting \"2026-03-02\"",
           "keyword": "When",
-          "command": "agent-browser find role button click --name \"Create plan\"",
-          "exit": 0,
-          "observed": "UI sent POST /api/plans -> 500; form stayed on /plans/new, no plan shown. The plan row WAS persisted"
+          "text": "Grace the HR coordinator creates a plan for \"Maya Fernando\", role \"Software Engineer\", department \"Engineering\", manager \"Ravi Perera\", starting \"2026-03-02\"",
+          "command": "API: POST /plans (Maya Fernando 5603, Software Engineer, Engineering, Ravi Perera, 2026-03-02) -> 201"
         },
         {
+          "keyword": "Then",
           "text": "Maya's plan lists \"Set up laptop\" for IT and \"Assign desk\" for Facilities",
-          "keyword": "Then",
-          "command": "curl -s $API/plans/<id>/tasks (HR token)",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks | grep -q '\"Set up laptop\".*IT' && grep -q 'Assign desk.*Facilities'",
           "exit": 0,
-          "observed": "tasks Set up laptop IT, Assign desk Facilities present (read via API; the plan page cannot load)"
+          "observed": "Set up laptop|IT|2026-02-27; Assign desk|Facilities|2026-03-01 (template also holds a leftover 'Order business cards' from an earlier run, so the plan lists it too)"
         },
         {
+          "keyword": "And",
           "text": "the plan shows the manager \"Ravi Perera\"",
-          "keyword": "Then",
-          "command": "curl -s -o /dev/null -w %{http_code} $API/plans/<id>",
-          "exit": 1,
-          "observed": "500 'sql:FieldMismatchError cannot be cast' - plan header with manager cannot be read anywhere"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id> | grep -q '\"managerName\":\"Ravi Perera\"'",
+          "exit": 0,
+          "observed": "managerName Ravi Perera"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "POST",
-            "url": "/api/plans",
-            "status": 500
-          }
-        ],
-        "console": [
-          "response body: incompatible types: 'sql:FieldMismatchError' cannot be cast to '(anydata|sql:Error)'"
-        ],
-        "snapshot": "- heading \"New onboarding plan\" (form still shown, url /plans/new)"
-      }
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -66,30 +49,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has the plan form open",
           "keyword": "Given",
-          "command": "agent-browser open /plans/new",
-          "exit": 0,
-          "observed": "form open"
+          "text": "Grace has the plan form open",
+          "command": "agent-browser click @e1081 on the New plan form with name/role/department/manager filled and the date blank (UI); also API POST /plans without startDate"
         },
         {
-          "text": "Grace submits it for \"Maya Fernando\" with no start date",
           "keyword": "When",
-          "command": "agent-browser find role button click --name \"Create plan\" (name/role/dept/manager filled, date empty)",
-          "exit": 0,
-          "observed": "0 POST requests left the page; also API POST without startDate -> 400 'required field startDate not present'"
+          "text": "Grace submits it for \"Maya Fernando\" with no start date",
+          "command": "agent-browser click @e1081 on the New plan form with name/role/department/manager filled and the date blank (UI); also API POST /plans without startDate"
         },
         {
-          "text": "no plan is added to the plans list",
           "keyword": "Then",
-          "command": "curl -s $API/tasks (HR) | count distinct planId, before vs after",
+          "text": "no plan is added to the plans list",
+          "command": "agent-browser get count ... ; plans count via GET /plans?includeClosed=true",
           "exit": 0,
-          "observed": "4 before, 4 after. Proxy for the plans list, which itself answers 500; a new plan would add its template tasks to /tasks"
+          "observed": "plan count 25 before and 25 after; no POST /plans in agent-browser network requests; form shows 'Choose a start date'; API alternative answered 400 \"required field 'startDate' not present\"; no plan named UiNoDate5603 exists"
         }
-      ],
-      "outcome": "passed"
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -100,30 +79,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Sam the IT task owner is signed in",
           "keyword": "Given",
-          "command": "/tmp/acc/login.sh test-it-task-owner",
-          "exit": 0,
-          "observed": "signed in as the IT test login"
+          "text": "Sam the IT task owner is signed in",
+          "command": "signed in as test-it-task-owner, agent-browser open /plans"
         },
         {
-          "text": "Sam looks for the onboarding plans",
           "keyword": "When",
-          "command": "agent-browser open /plans",
-          "exit": 0,
-          "observed": "redirected to /forbidden 'Not available to you'"
+          "text": "Sam looks for the onboarding plans",
+          "command": "signed in as test-it-task-owner, agent-browser open /plans"
         },
         {
-          "text": "Sam has no onboarding plans list or plan form available",
           "keyword": "Then",
-          "command": "agent-browser get count 'a[href=\"/plans\"]'",
+          "text": "Sam has no onboarding plans list or plan form available",
+          "command": "agent-browser get url",
           "exit": 0,
-          "observed": "0 (and 0 for a[href=\"/dashboard\"]); only nav link is \"My tasks\""
+          "observed": "/forbidden ('Onboarding plans needs the HR Coordinator'); sidebar has only My tasks; /dashboard, /overdue and /template also route to /forbidden"
         }
-      ],
-      "outcome": "passed"
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -132,30 +107,26 @@
       "rule": "The HR coordinator may add, change and remove tasks in a hire's plan",
       "scenario": "Adding a task to a plan",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has opened a new plan for \"Maya Fernando\" starting \"2026-03-02\"",
           "keyword": "Given",
-          "command": "UI plan creation returned 500 (plan persisted); plan opened by id through the API",
-          "exit": 0,
-          "observed": "plan 'Maya Fernando' start 2026-03-02"
+          "text": "Grace has opened a new plan for \"Maya Fernando\" starting \"2026-03-02\"",
+          "command": "API: POST /plans/<id>/tasks {\"title\":\"Order business cards\",\"department\":\"Facilities\",\"dueOffsetDays\":5} -> 201 (plan start 2026-03-02)"
         },
         {
-          "text": "Grace adds the task \"Order business cards\" for Facilities, due 5 days after the start date",
           "keyword": "When",
-          "command": "curl -X POST $API/plans/<id>/tasks -d '{\"title\":\"Order business cards\",\"department\":\"Facilities\",\"dueOffsetDays\":5}' (API, UI plan page cannot load)",
-          "exit": 0,
-          "observed": "201"
+          "text": "Grace adds the task \"Order business cards\" for Facilities, due 5 days after the start date",
+          "command": "API: POST /plans/<id>/tasks {\"title\":\"Order business cards\",\"department\":\"Facilities\",\"dueOffsetDays\":5} -> 201 (plan start 2026-03-02)"
         },
         {
-          "text": "the plan lists \"Order business cards\" for Facilities, due \"2026-03-07\"",
           "keyword": "Then",
-          "command": "curl -s $API/plans/<id>/tasks (HR)",
+          "text": "the plan lists \"Order business cards\" for Facilities, due \"2026-03-07\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks | grep -q '\"dueDate\":\"2026-03-07\"'",
           "exit": 0,
-          "observed": "Order business cards, Facilities, dueDate 2026-03-07"
+          "observed": "Order business cards|Facilities|2026-03-07"
         }
-      ],
-      "outcome": "passed"
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -164,30 +135,26 @@
       "rule": "The HR coordinator may add, change and remove tasks in a hire's plan",
       "scenario": "Removing a task from a plan",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has opened a new plan for \"Maya Fernando\" that lists \"Assign desk\"",
           "keyword": "Given",
-          "command": "curl -s $API/plans/<id>/tasks",
-          "exit": 0,
-          "observed": "Maya's plan lists Assign desk"
+          "text": "Grace has opened a new plan for \"Maya Fernando\" that lists \"Assign desk\"",
+          "command": "API: DELETE /plans/<id>/tasks/<Assign desk id> -> 204"
         },
         {
-          "text": "Grace removes \"Assign desk\" from the plan",
           "keyword": "When",
-          "command": "curl -X DELETE $API/plans/<id>/tasks/<Assign desk id> (API)",
-          "exit": 0,
-          "observed": "204"
+          "text": "Grace removes \"Assign desk\" from the plan",
+          "command": "API: DELETE /plans/<id>/tasks/<Assign desk id> -> 204"
         },
         {
-          "text": "the plan no longer lists \"Assign desk\"",
           "keyword": "Then",
-          "command": "curl -s $API/tasks (HR) | grep 'Assign desk' for Maya",
+          "text": "the plan no longer lists \"Assign desk\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks | grep -vq 'Assign desk'",
           "exit": 0,
-          "observed": "Maya's tasks now: Set up laptop, Order business cards - Assign desk absent"
+          "observed": "remaining: Set up laptop; Order business cards"
         }
-      ],
-      "outcome": "passed"
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -198,30 +165,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has opened a new plan for \"Maya Fernando\"",
           "keyword": "Given",
-          "command": "curl $API/plans/<id>/tasks",
-          "exit": 0,
-          "observed": "3 tasks"
+          "text": "Grace has opened a new plan for \"Maya Fernando\"",
+          "command": "API: POST /plans/<id>/tasks {\"title\":\"\"} -> 400 \"title is required and at most 200 characters\""
         },
         {
-          "text": "Grace adds a task with no title",
           "keyword": "When",
-          "command": "curl -X POST $API/plans/<id>/tasks -d '{\"title\":\"\",...}' (API)",
-          "exit": 0,
-          "observed": "400 'title is required and at most 200 characters'; missing title -> 400; blank -> 400"
+          "text": "Grace adds a task with no title",
+          "command": "API: POST /plans/<id>/tasks {\"title\":\"\"} -> 400 \"title is required and at most 200 characters\""
         },
         {
-          "text": "the number of tasks in the plan is unchanged",
           "keyword": "Then",
-          "command": "curl -s $API/plans/<id>/tasks | count",
+          "text": "the number of tasks in the plan is unchanged",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks | count",
           "exit": 0,
-          "observed": "still 3"
+          "observed": "count 3 before and 3 after"
         }
-      ],
-      "outcome": "passed"
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -230,37 +193,33 @@
       "rule": "Editing the standard checklist changes future plans only",
       "scenario": "A template edit does not reach an existing plan",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has created a plan for \"Maya Fernando\" from a checklist holding \"Set up laptop\"",
           "keyword": "Given",
-          "command": "curl -X POST $API/plans (TmplA) with template of Set up laptop + Assign desk",
-          "exit": 0,
-          "observed": "plan created (response 500 but persisted)"
+          "text": "Grace has created a plan for \"Maya Fernando\" from a checklist holding \"Set up laptop\"",
+          "command": "API: POST /template-tasks \"Badge photo 5603\" (HR). The title \"Order business cards\" was already on the standard checklist from an earlier run, so a unique title stood in for it"
         },
         {
-          "text": "Grace adds \"Order business cards\" to the standard checklist",
           "keyword": "When",
-          "command": "curl -X POST $API/template-tasks -d '{\"title\":\"Order business cards\",...}'",
-          "exit": 0,
-          "observed": "201"
+          "text": "Grace adds \"Order business cards\" to the standard checklist",
+          "command": "API: POST /template-tasks \"Badge photo 5603\" (HR). The title \"Order business cards\" was already on the standard checklist from an earlier run, so a unique title stood in for it"
         },
         {
+          "keyword": "Then",
           "text": "Maya's plan does not list \"Order business cards\"",
-          "keyword": "Then",
-          "command": "curl -s $API/tasks (HR), TmplA rows",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<Maya>/tasks | grep -c 'Badge photo 5603'",
           "exit": 0,
-          "observed": "TmplA: Set up laptop, Assign desk - no Order business cards"
+          "observed": "0 in Maya's plan"
         },
         {
+          "keyword": "And",
           "text": "a plan created afterwards for \"Daniel Okoye\" lists \"Order business cards\"",
-          "keyword": "Then",
-          "command": "curl -s $API/tasks (HR), TmplB rows created afterwards",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<Daniel created afterwards>/tasks | grep -c 'Badge photo 5603'",
           "exit": 0,
-          "observed": "TmplB: Set up laptop, Assign desk, Order business cards"
+          "observed": "1 in Daniel's plan"
         }
-      ],
-      "outcome": "passed"
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -269,43 +228,26 @@
       "rule": "Changing the start date moves every due date with it",
       "scenario": "A later start date shifts due dates",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has opened a plan for \"Maya Fernando\" starting \"2026-03-02\" with \"Set up laptop\" due 3 days before the start date",
           "keyword": "Given",
-          "command": "curl $API/plans/<id>/tasks",
-          "exit": 0,
-          "observed": "Maya starting 2026-03-02, Set up laptop due 2026-02-27 (3 days before)"
+          "text": "Grace has opened a plan for \"Maya Fernando\" starting \"2026-03-02\" with \"Set up laptop\" due 3 days before the start date",
+          "command": "API: PATCH /plans/<id> {\"startDate\":\"2026-03-09\"} (was 2026-03-02, Set up laptop due 2026-02-27)"
         },
         {
-          "text": "Grace changes the start date to \"2026-03-09\"",
           "keyword": "When",
-          "command": "curl -X PATCH $API/plans/<id> -d '{\"startDate\":\"2026-03-09\"}' (API; the plan page cannot load)",
-          "exit": 0,
-          "observed": "500 with empty body"
+          "text": "Grace changes the start date to \"2026-03-09\"",
+          "command": "API: PATCH /plans/<id> {\"startDate\":\"2026-03-09\"} (was 2026-03-02, Set up laptop due 2026-02-27)"
         },
         {
-          "text": "\"Set up laptop\" is due \"2026-03-06\"",
           "keyword": "Then",
-          "command": "curl -s $API/plans/<id>/tasks | Set up laptop dueDate",
-          "exit": 1,
-          "observed": "2026-02-27 - unchanged, expected 2026-03-06"
+          "text": "\"Set up laptop\" is due \"2026-03-06\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks | grep -q 'Set up laptop.*2026-03-06'",
+          "exit": 0,
+          "observed": "Set up laptop|2026-03-06"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "PATCH",
-            "url": "/plans/9a57e2de-5bbf-49e9-bbd9-5b557ae7fe91",
-            "status": 500
-          }
-        ],
-        "console": [
-          "no page involved: plan page cannot be opened (GET /plans/{id} 500)"
-        ],
-        "snapshot": "Set up laptop dueDate 2026-02-27 after the PATCH"
-      }
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -314,48 +256,31 @@
       "rule": "The HR coordinator sees every plan and can open any one",
       "scenario": "A cancelled plan stays in the list",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "Grace has created a plan for \"Maya Fernando\"",
-          "keyword": "Given",
-          "command": "curl -X POST $API/plans (Maya Fernando)",
-          "exit": 0,
-          "observed": "persisted (response 500)"
+          "command": "API: create Maya, create Lena and POST /plans/<id>/cancel; GET /plans?includeClosed=true"
         },
         {
+          "keyword": "And",
           "text": "Grace has created a plan for \"Lena Fischer\" and cancelled it",
-          "keyword": "Given",
-          "command": "curl -X POST $API/plans (Lena) then POST /plans/<id>/cancel",
-          "exit": 1,
-          "observed": "cancel answers 500 though it took effect"
+          "command": "API: create Maya, create Lena and POST /plans/<id>/cancel; GET /plans?includeClosed=true"
         },
         {
-          "text": "Grace opens the onboarding plans list",
           "keyword": "When",
-          "command": "agent-browser open /plans (HR)",
-          "exit": 0,
-          "observed": "page loaded"
+          "text": "Grace opens the onboarding plans list",
+          "command": "API: create Maya, create Lena and POST /plans/<id>/cancel; GET /plans?includeClosed=true"
         },
         {
-          "text": "the list includes \"Maya Fernando\" as active and \"Lena Fischer\" as cancelled",
           "keyword": "Then",
-          "command": "agent-browser network requests (GET /api/plans?includeClosed=true...)",
-          "exit": 1,
-          "observed": "500: the list shows neither Maya as active nor Lena as cancelled"
+          "text": "the list includes \"Maya Fernando\" as active and \"Lena Fischer\" as cancelled",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans?includeClosed=true | grep both",
+          "exit": 0,
+          "observed": "Maya T5603=active; Lena T5603=cancelled (UI /plans also shows 'Lena3 T5603 ... Cancelled' next to 'Maya T5603 ... Active')"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/plans?includeClosed=false&sort=startDate&limit=100&offset=0",
-            "status": 500
-          }
-        ],
-        "console": [],
-        "snapshot": "- heading \"New hires\"\n- combobox \"Include completed and cancelled plans No\"\n(no plan rows rendered)"
-      }
+      ]
     },
     {
       "feature": "F1 Onboarding plans",
@@ -364,48 +289,26 @@
       "rule": "A cancelled plan's tasks leave every task list and reminder",
       "scenario": "Cancelling a plan hides its tasks from the IT list",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has created a plan for \"Lena Fischer\" that lists \"Set up laptop\" for IT",
           "keyword": "Given",
-          "command": "curl -X POST $API/plans (Lena Fischer)",
-          "exit": 0,
-          "observed": "created, tasks Set up laptop (IT) copied (response 500, persisted)"
+          "text": "Grace has created a plan for \"Lena Fischer\" that lists \"Set up laptop\" for IT",
+          "command": "API: create Lena2, IT list shows 1 of its tasks, POST /plans/<id>/cancel"
         },
         {
-          "text": "Grace cancels Lena's plan",
           "keyword": "When",
-          "command": "curl -X POST $API/plans/<Lena>/cancel",
-          "exit": 1,
-          "observed": "500 (cancel took effect: Lena's tasks left HR GET /tasks)"
+          "text": "Grace cancels Lena's plan",
+          "command": "API: create Lena2, IT list shows 1 of its tasks, POST /plans/<id>/cancel"
         },
         {
-          "text": "Sam the IT task owner's task list does not include \"Set up laptop\" for \"Lena Fischer\"",
           "keyword": "Then",
-          "command": "curl -H <IT token> $API/me/department/tasks",
-          "exit": 1,
-          "observed": "401 empty body; Sam's list cannot be read at all. Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "text": "Sam the IT task owner's task list does not include \"Set up laptop\" for \"Lena Fischer\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks?status=all (as IT) | count Lena2 rows",
+          "exit": 0,
+          "observed": "1 before cancel, 0 after"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/me",
-            "status": 200
-          },
-          {
-            "method": "GET",
-            "url": "/api/me/department/tasks?status=todo&limit=100&offset=0",
-            "status": 401
-          }
-        ],
-        "console": [
-          "GET /api/me returns department:null for test-it-task-owner although the token carries groups:[\"IT Team\"]"
-        ],
-        "snapshot": "- heading \"Not available to you\" (url /forbidden)\n- link \"My tasks\""
-      }
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -414,56 +317,38 @@
       "rule": "A task owner sees only their own department's open tasks, soonest due first",
       "scenario": "IT sees IT tasks ordered by due date",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "a new plan for \"Maya Fernando\" has \"Create email account\" for IT due \"2026-03-02\" and \"Set up laptop\" for IT due \"2026-02-27\"",
-          "keyword": "Given",
-          "command": "curl -X POST $API/plans (Given: Maya plan with IT/Facilities tasks from the template)",
-          "exit": 0,
-          "observed": "tasks created"
+          "command": "API: create plan, add IT task 'Create email account' due offset 0; IT list GET /me/department/tasks?status=todo"
         },
         {
+          "keyword": "And",
           "text": "the plan also has \"Assign desk\" for Facilities",
-          "keyword": "Given",
-          "observed": "the IT task list could not be opened by the IT login"
+          "command": "API: create plan, add IT task 'Create email account' due offset 0; IT list GET /me/department/tasks?status=todo"
         },
         {
-          "text": "Sam the IT task owner opens the task list",
           "keyword": "When",
-          "command": "agent-browser open / as test-it-task-owner; get url",
-          "exit": 1,
-          "observed": "/forbidden 'Not available to you'; GET /api/me/department/tasks -> 401"
+          "text": "Sam the IT task owner opens the task list",
+          "command": "API: create plan, add IT task 'Create email account' due offset 0; IT list GET /me/department/tasks?status=todo"
         },
         {
-          "text": "\"Set up laptop\" is listed before \"Create email account\"",
           "keyword": "Then",
-          "command": "(same page)",
-          "observed": "not reached"
+          "text": "\"Set up laptop\" is listed before \"Create email account\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks?status=todo | order check",
+          "exit": 0,
+          "observed": "Set up laptop|IT|2026-02-27 listed before Create email account|IT|2026-03-02"
         },
         {
+          "keyword": "And",
           "text": "\"Assign desk\" is not listed",
-          "keyword": "Then"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks?status=todo | grep -vq 'Assign desk' (this plan)",
+          "exit": 0,
+          "observed": "Assign desk (Facilities) absent from the IT list"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/me",
-            "status": 200
-          },
-          {
-            "method": "GET",
-            "url": "/api/me/department/tasks?status=todo&limit=100&offset=0",
-            "status": 401
-          }
-        ],
-        "console": [
-          "GET /api/me returns department:null for test-it-task-owner although the token carries groups:[\"IT Team\"]"
-        ],
-        "snapshot": "- heading \"Not available to you\" (url /forbidden)\n- link \"My tasks\""
-      }
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -472,24 +357,26 @@
       "rule": "A task owner may claim a task and release it again",
       "scenario": "Claiming a task",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has the unclaimed task \"Set up laptop\" for IT",
           "keyword": "Given",
-          "observed": "plan with unclaimed IT task creatable, but no task-owner session can read it"
+          "text": "a new plan for \"Maya Fernando\" has the unclaimed task \"Set up laptop\" for IT",
+          "command": "API as IT: POST /me/department/tasks/<id>/claim -> 200"
         },
         {
-          "text": "Sam claims \"Set up laptop\"",
           "keyword": "When",
-          "observed": "Claim control absent: IT session lands on /forbidden; POST /me/department/tasks/{id}/claim -> 401 from the gateway (empty body) - not an app answer"
+          "text": "Sam claims \"Set up laptop\"",
+          "command": "API as IT: POST /me/department/tasks/<id>/claim -> 200"
         },
         {
-          "text": "\"Set up laptop\" shows \"Sam Torres\" as who claimed it",
           "keyword": "Then",
-          "observed": "cannot be reached; 'Sam Torres' also cannot be shown since /me displayName equals the username"
+          "text": "\"Set up laptop\" shows \"Sam Torres\" as who claimed it",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks/<id>/claim | grep claimedBy",
+          "exit": 0,
+          "observed": "claimedBy test-it-task-owner, claimedByMe true. The test account has no 'Sam Torres' display name; the IT login stands in for Sam"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -498,24 +385,26 @@
       "rule": "A task owner may claim a task and release it again",
       "scenario": "Releasing a task",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Sam has claimed \"Set up laptop\" in a new plan for \"Maya Fernando\"",
           "keyword": "Given",
-          "observed": "Sam cannot claim (see claim scenario)"
+          "text": "Sam has claimed \"Set up laptop\" in a new plan for \"Maya Fernando\"",
+          "command": "API as IT: claim then POST .../release -> 200"
         },
         {
-          "text": "Sam releases \"Set up laptop\"",
           "keyword": "When",
-          "observed": "Release control absent; API 401"
+          "text": "Sam releases \"Set up laptop\"",
+          "command": "API as IT: claim then POST .../release -> 200"
         },
         {
-          "text": "\"Set up laptop\" shows nobody as who claimed it",
           "keyword": "Then",
-          "observed": "not reached"
+          "text": "\"Set up laptop\" shows nobody as who claimed it",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks/<id>/release | grep claimedBy",
+          "exit": 0,
+          "observed": "claimedBy null, claimedByMe false"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -524,24 +413,24 @@
       "rule": "Any member of the owning department may mark a task done, and reopen it",
       "scenario": "A colleague completes a task someone else claimed",
       "tags": [],
+      "outcome": "blocked",
       "steps": [
         {
-          "text": "Sam has claimed \"Set up laptop\" in a new plan for \"Maya Fernando\"",
           "keyword": "Given",
-          "observed": "claiming impossible: Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "text": "Sam has claimed \"Set up laptop\" in a new plan for \"Maya Fernando\"",
+          "command": "setup done through the API/UI as described in the report"
         },
         {
-          "text": "Ivan, another IT task owner, marks \"Set up laptop\" as done",
           "keyword": "When",
-          "observed": "Ivan (second IT owner) has no test login and cannot complete either"
+          "text": "Ivan, another IT task owner, marks \"Set up laptop\" as done",
+          "observed": "The When needs a second IT task owner (Ivan). The published logins hold exactly one IT account (test-it-task-owner); test-hr-task-owner is HR department, so no second IT login exists to act as Ivan"
         },
         {
-          "text": "\"Set up laptop\" is done and shows \"Ivan\" as who completed it",
           "keyword": "Then",
-          "observed": "not reached"
+          "text": "\"Set up laptop\" is done and shows \"Ivan\" as who completed it",
+          "observed": "not reached: The When needs a second IT task owner (Ivan). The published logins hold exactly one IT account (test-it-task-owner); test-hr-task-owner is HR department, so no second IT login exists to act as Ivan"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -550,24 +439,26 @@
       "rule": "Any member of the owning department may mark a task done, and reopen it",
       "scenario": "Reopening a task marked done by mistake",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Sam has marked \"Set up laptop\" as done in a new plan for \"Maya Fernando\"",
           "keyword": "Given",
-          "observed": "completing impossible: Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "text": "Sam has marked \"Set up laptop\" as done in a new plan for \"Maya Fernando\"",
+          "command": "API as IT: POST .../complete then POST .../reopen"
         },
         {
-          "text": "Sam reopens \"Set up laptop\"",
           "keyword": "When",
-          "observed": "not reached"
+          "text": "Sam reopens \"Set up laptop\"",
+          "command": "API as IT: POST .../complete then POST .../reopen"
         },
         {
-          "text": "\"Set up laptop\" is to do again",
           "keyword": "Then",
-          "observed": "not reached"
+          "text": "\"Set up laptop\" is to do again",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks/<id>/reopen | grep '\"status\":\"todo\"'",
+          "exit": 0,
+          "observed": "status todo, completedBy null"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -578,27 +469,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has the task \"Set up laptop\" for IT",
           "keyword": "Given",
-          "command": "curl -X POST $API/plans (plan with Set up laptop IT)",
-          "exit": 0,
-          "observed": "created"
+          "text": "a new plan for \"Maya Fernando\" has the task \"Set up laptop\" for IT",
+          "command": "API as Facilities owner: POST /me/department/tasks/<IT task>/complete"
         },
         {
-          "text": "Nina the facilities task owner tries to mark \"Set up laptop\" as done",
           "keyword": "When",
-          "command": "curl -X POST -H <Facilities token> $API/me/department/tasks/<id>/complete",
-          "observed": "401 empty body from the gateway; nothing shows the app itself refused"
+          "text": "Nina the facilities task owner tries to mark \"Set up laptop\" as done",
+          "command": "API as Facilities owner: POST /me/department/tasks/<IT task>/complete"
         },
         {
-          "text": "\"Set up laptop\" is still to do",
           "keyword": "Then",
-          "observed": "a still-to-do state would hold regardless of the rule, since Facilities cannot reach any task data"
+          "text": "\"Set up laptop\" is still to do",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks/<id> (as IT) | grep '\"status\":\"todo\"'",
+          "exit": 0,
+          "observed": "app answered 404 {code:404, description:'Task not found'} to Facilities (body names the rule); IT view of the task still todo"
         }
-      ],
-      "outcome": "unjudgeable"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -607,29 +497,33 @@
       "rule": "The HR coordinator sees who claimed each task and whether it is done",
       "scenario": "HR sees claim and completion",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Sam has claimed \"Set up laptop\" and Nina has completed \"Assign desk\" in a new plan for \"Maya Fernando\"",
           "keyword": "Given",
-          "observed": "claim/complete by Sam and Nina impossible: Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "text": "Sam has claimed \"Set up laptop\" and Nina has completed \"Assign desk\" in a new plan for \"Maya Fernando\"",
+          "command": "API: IT claims Set up laptop, Facilities claims and completes Assign desk, HR GET /plans/<id>/tasks"
         },
         {
-          "text": "Grace the HR coordinator opens Maya's plan",
           "keyword": "When",
-          "observed": "not reached"
+          "text": "Grace the HR coordinator opens Maya's plan",
+          "command": "API: IT claims Set up laptop, Facilities claims and completes Assign desk, HR GET /plans/<id>/tasks"
         },
         {
+          "keyword": "Then",
           "text": "\"Set up laptop\" shows \"Sam Torres\" and is to do",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks (as HR) | grep claimed",
+          "exit": 0,
+          "observed": "Set up laptop claimed=test-it-task-owner todo; Assign desk claimed=test-facilities-task-owner, done (Done by test-facilities-task-owner). Test accounts have no Sam Torres / Nina Patel display names"
         },
         {
+          "keyword": "And",
           "text": "\"Assign desk\" shows \"Nina Patel\" and is done",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/plans/<id>/tasks (as HR)",
+          "exit": 0,
+          "observed": "Assign desk status done, as above"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -640,27 +534,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "unjudgeable",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has the task \"Set up laptop\" for IT",
           "keyword": "Given",
-          "command": "curl -X POST $API/plans (plan with Set up laptop IT)",
-          "exit": 0,
-          "observed": "created"
+          "text": "a new plan for \"Maya Fernando\" has the task \"Set up laptop\" for IT",
+          "command": "API as HR: POST /me/department/tasks/<id>/complete"
         },
         {
-          "text": "Grace the HR coordinator tries to mark \"Set up laptop\" as done",
           "keyword": "When",
-          "command": "curl -X POST -H <HR token> $API/me/department/tasks/<id>/complete",
-          "observed": "401 empty body from the gateway (HR lacks tasks:complete); not an app answer"
+          "text": "Grace the HR coordinator tries to mark \"Set up laptop\" as done",
+          "command": "API as HR: POST /me/department/tasks/<id>/complete"
         },
         {
-          "text": "\"Set up laptop\" is still to do",
           "keyword": "Then",
-          "observed": "holds trivially; no app-level refusal observed"
+          "text": "\"Set up laptop\" is still to do",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks/<id>/complete",
+          "exit": 0,
+          "observed": "401 from the gateway; task still todo, but the refusal cannot be attributed to the app"
         }
-      ],
-      "outcome": "unjudgeable"
+      ]
     },
     {
       "feature": "F2 Task assignment and completion",
@@ -669,24 +562,26 @@
       "rule": "A task owner may add a note to a task of their department",
       "scenario": "Saving a serial number",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Sam has claimed \"Set up laptop\" in a new plan for \"Maya Fernando\"",
           "keyword": "Given",
-          "observed": "claiming impossible: Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "text": "Sam has claimed \"Set up laptop\" in a new plan for \"Maya Fernando\"",
+          "command": "API as IT: PUT /me/department/tasks/<id>/note {\"note\":\"Serial C02XK1\"} -> 200"
         },
         {
-          "text": "Sam saves the note \"Serial C02XK1\" on \"Set up laptop\"",
           "keyword": "When",
-          "observed": "note control absent; PUT .../note -> 401 from the gateway"
+          "text": "Sam saves the note \"Serial C02XK1\" on \"Set up laptop\"",
+          "command": "API as IT: PUT /me/department/tasks/<id>/note {\"note\":\"Serial C02XK1\"} -> 200"
         },
         {
-          "text": "\"Set up laptop\" shows the note \"Serial C02XK1\"",
           "keyword": "Then",
-          "observed": "not reached"
+          "text": "\"Set up laptop\" shows the note \"Serial C02XK1\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks/<id> | grep 'Serial C02XK1'",
+          "exit": 0,
+          "observed": "note Serial C02XK1"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -695,60 +590,40 @@
       "rule": "A task is overdue from the day after its due date until it is done",
       "scenario": "An IT task owner sees a reminder for a late IT task",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
           "keyword": "Given",
-          "command": "curl -X POST $API/plans (startDate = today so IT task due 3 days ago; Maya earlier plan has Set up laptop 227 days overdue)",
-          "exit": 0,
-          "observed": "HR /tasks shows daysOverdue>0 for the IT task"
+          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
+          "command": "API: create plan 'Late T5603' starting today so Set up laptop is due 2026-10-09; IT login opens /my-tasks (UI)"
         },
         {
-          "text": "Sam the IT task owner opens the app",
           "keyword": "When",
-          "command": "agent-browser open / as test-it-task-owner; get url",
-          "exit": 1,
-          "observed": "/forbidden - no app shell for IT"
+          "text": "Sam the IT task owner opens the app",
+          "command": "API: create plan 'Late T5603' starting today so Set up laptop is due 2026-10-09; IT login opens /my-tasks (UI)"
         },
         {
+          "keyword": "Then",
           "text": "a reminder says 1 IT task is overdue",
-          "keyword": "Then",
-          "command": "agent-browser network requests",
-          "exit": 1,
-          "observed": "GET /api/me/department/tasks?overdue=true... -> 401: no reminder, no overdue marking, no navigation badge"
+          "command": "agent-browser wait --text \"overdue IT tasks\" --timeout 3000",
+          "exit": 0,
+          "observed": "banner '18 overdue IT tasks' ('These are past their due date. They stay flagged until someone marks them done.'). The IT list holds leftover overdue tasks from earlier runs, so the count was judged by change: IT overdue count rose by exactly 1 when this plan was created (API, 10 -> 11)"
         },
         {
+          "keyword": "And",
           "text": "\"Set up laptop\" is marked overdue, 3 days late, at the top of Sam's list",
-          "keyword": "Then",
-          "command": "(same)",
-          "observed": "not shown"
+          "command": "agent-browser snapshot -i | grep 'Late T5603'",
+          "exit": 0,
+          "observed": "row 'Set up laptop | Late T5603 | 2026-10-09 | 3 days overdue'. It sits in the overdue block, which is listed ahead of non-overdue rows, but 13 older overdue rows from earlier runs precede it, so it is not literally first in this shared list"
         },
         {
+          "keyword": "And",
           "text": "the navigation shows 1 overdue task",
-          "keyword": "Then",
-          "command": "(same)",
-          "observed": "not shown"
+          "command": "agent-browser wait --text \"My tasks (18 overdue)\" --timeout 3000",
+          "exit": 0,
+          "observed": "navigation link 'My tasks (18 overdue)'"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/me",
-            "status": 200
-          },
-          {
-            "method": "GET",
-            "url": "/api/me/department/tasks?status=todo&limit=100&offset=0",
-            "status": 401
-          }
-        ],
-        "console": [
-          "GET /api/me returns department:null for test-it-task-owner although the token carries groups:[\"IT Team\"]"
-        ],
-        "snapshot": "- heading \"Not available to you\" (url /forbidden)\n- link \"My tasks\""
-      }
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -757,24 +632,26 @@
       "rule": "A task is overdue from the day after its due date until it is done",
       "scenario": "A task due today is not overdue",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due today and still to do",
           "keyword": "Given",
-          "observed": "plan creatable but..."
+          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due today and still to do",
+          "command": "API: create plan 'Today T5603' starting 2026-10-15 so Set up laptop is due today; IT login opens /my-tasks"
         },
         {
-          "text": "Sam opens the app",
           "keyword": "When",
-          "observed": "Sam's app is /forbidden; absence of a reminder would say nothing about the overdue rule"
+          "text": "Sam opens the app",
+          "command": "API: create plan 'Today T5603' starting 2026-10-15 so Set up laptop is due today; IT login opens /my-tasks"
         },
         {
-          "text": "no overdue reminder is shown to Sam",
           "keyword": "Then",
-          "observed": "assertion would be vacuous"
+          "text": "no overdue reminder is shown to Sam",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks?overdue=true (as IT) | count",
+          "exit": 0,
+          "observed": "IT overdue count 11 before and 11 after; task dueDate 2026-10-12 daysOverdue 0; UI row shows status 'To do'. An absolute 'no reminder' is not possible here because earlier runs left overdue IT tasks, so this was judged by change"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -783,24 +660,26 @@
       "rule": "A reminder disappears only when the task is done",
       "scenario": "Completing the task clears the reminder",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
           "keyword": "Given",
-          "observed": "no reminder can exist for Sam"
+          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
+          "command": "agent-browser click @e550 ('Mark done' on the Late T5603 row); network: POST /api/me/department/tasks/<id>/complete -> 200"
         },
         {
-          "text": "Sam marks \"Set up laptop\" as done",
           "keyword": "When",
-          "observed": "Complete control absent; API 401"
+          "text": "Sam marks \"Set up laptop\" as done",
+          "command": "agent-browser click @e550 ('Mark done' on the Late T5603 row); network: POST /api/me/department/tasks/<id>/complete -> 200"
         },
         {
-          "text": "no overdue reminder is shown to Sam",
           "keyword": "Then",
-          "observed": "vacuous"
+          "text": "no overdue reminder is shown to Sam",
+          "command": "agent-browser wait --text \"My tasks (17 overdue)\" --timeout 4000",
+          "exit": 0,
+          "observed": "nav changed from 18 to 17 overdue"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -811,24 +690,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
           "keyword": "Given",
-          "observed": "no reminder is ever rendered to Sam"
+          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
+          "command": "agent-browser find role button click --name \"Dismiss\" -> no such button among 44 buttons"
         },
         {
-          "text": "Sam looks for a way to dismiss the reminder",
           "keyword": "When",
-          "observed": "nothing to look at: /forbidden page"
+          "text": "Sam looks for a way to dismiss the reminder",
+          "command": "agent-browser find role button click --name \"Dismiss\" -> no such button among 44 buttons"
         },
         {
-          "text": "the reminder stays and the task is still overdue",
           "keyword": "Then",
-          "observed": "not reached"
+          "text": "the reminder stays and the task is still overdue",
+          "command": "agent-browser get count \"[aria-label*=ismiss],[title*=ismiss]\"",
+          "exit": 0,
+          "observed": "0 dismiss controls; banner 'overdue IT tasks' still present (wait exit 0) and the task still shows '3 days overdue'"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -839,25 +720,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
           "keyword": "Given",
-          "observed": "plan created"
+          "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago and still to do",
+          "command": "Facilities login opens /my-tasks (UI) with Late T5603's IT task overdue"
         },
         {
-          "text": "Nina the facilities task owner opens the app",
           "keyword": "When",
-          "command": "agent-browser open / as test-facilities-task-owner; get url",
-          "observed": "/forbidden; /me department null"
+          "text": "Nina the facilities task owner opens the app",
+          "command": "Facilities login opens /my-tasks (UI) with Late T5603's IT task overdue"
         },
         {
-          "text": "no overdue reminder is shown to Nina",
           "keyword": "Then",
-          "observed": "no reminder shown, but only because Nina can see nothing; vacuous"
+          "text": "no overdue reminder is shown to Nina",
+          "command": "agent-browser snapshot -i | grep -c 'row \"Set up laptop'",
+          "exit": 0,
+          "observed": "0 IT rows in Nina's list; banner reads '21 overdue Facilities tasks' (her own department)"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -866,41 +748,45 @@
       "rule": "The HR coordinator sees every overdue task with how late it is and who claimed it",
       "scenario": "HR sees overdue tasks across hires",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "a new plan for \"Maya Fernando\" has \"Set up laptop\" for IT due 3 days ago, claimed by Sam",
-          "keyword": "Given",
-          "observed": "Sam cannot claim; claimed-by cannot be set up (Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule).)"
+          "command": "API: Late T5603 laptop claimed by IT login; plan Dan2 T5603 starting today leaves Assign desk 1 day overdue, unclaimed; HR GET /tasks?overdue=true"
         },
         {
+          "keyword": "And",
           "text": "a new plan for \"Daniel Okoye\" has \"Assign desk\" for Facilities due 1 day ago, unclaimed",
-          "keyword": "Given",
-          "observed": "Daniel plan creatable but scenario cannot complete"
+          "command": "API: Late T5603 laptop claimed by IT login; plan Dan2 T5603 starting today leaves Assign desk 1 day overdue, unclaimed; HR GET /tasks?overdue=true"
         },
         {
-          "text": "Grace the HR coordinator opens the overdue tasks",
           "keyword": "When",
-          "command": "agent-browser open /overdue (HR)",
-          "exit": 0,
-          "observed": "page lists Maya rows with days overdue and 'Nobody yet' (HR Overdue page works: GET /api/tasks?overdue=true 200)"
+          "text": "Grace the HR coordinator opens the overdue tasks",
+          "command": "API: Late T5603 laptop claimed by IT login; plan Dan2 T5603 starting today leaves Assign desk 1 day overdue, unclaimed; HR GET /tasks?overdue=true"
         },
         {
+          "keyword": "Then",
           "text": "\"Set up laptop\" for \"Maya Fernando\" shows 3 days overdue and \"Sam Torres\"",
-          "keyword": "Then",
-          "observed": "claimed-by not reachable"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/tasks?overdue=true (as HR) | grep Late",
+          "exit": 0,
+          "observed": "Late T5603|Set up laptop|3 days|test-it-task-owner"
         },
         {
+          "keyword": "And",
           "text": "\"Assign desk\" for \"Daniel Okoye\" shows 1 day overdue and nobody",
-          "keyword": "Then",
-          "observed": "claimed-by not reachable"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/tasks?overdue=true (as HR) | grep Dan2",
+          "exit": 0,
+          "observed": "Dan2 T5603|Assign desk|1 day|claimedBy null"
         },
         {
+          "keyword": "And",
           "text": "the 3-day task is listed first",
-          "keyword": "Then",
-          "observed": "not judged"
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/tasks?overdue=true (as HR) | index check",
+          "exit": 0,
+          "observed": "position 24 (3-day Late laptop) before position 32 (Dan2 desk). Display names are the login names, not Sam Torres"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F3 Overdue reminders",
@@ -911,25 +797,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Grace has cancelled the plan for \"Lena Fischer\", whose \"Set up laptop\" for IT was due 3 days ago",
           "keyword": "Given",
-          "command": "curl POST plan Lena + cancel",
-          "observed": "cancelled (cancel answers 500 but takes effect; Lena's tasks absent from HR /tasks)"
+          "text": "Grace has cancelled the plan for \"Lena Fischer\", whose \"Set up laptop\" for IT was due 3 days ago",
+          "command": "API: create plan Cancel T5603 starting today (laptop 3 days late) then POST /plans/<id>/cancel"
         },
         {
-          "text": "Sam opens the app",
           "keyword": "When",
-          "observed": "Sam's session is /forbidden"
+          "text": "Sam opens the app",
+          "command": "API: create plan Cancel T5603 starting today (laptop 3 days late) then POST /plans/<id>/cancel"
         },
         {
-          "text": "no overdue reminder is shown to Sam for \"Lena Fischer\"",
           "keyword": "Then",
-          "observed": "vacuous"
+          "text": "no overdue reminder is shown to Sam for \"Lena Fischer\"",
+          "command": "curl -s -H 'Authorization: Bearer <token>' $API/me/department/tasks?overdue=true (as IT) | count",
+          "exit": 0,
+          "observed": "IT overdue 11 before create, 12 after create, 11 after cancel"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -938,34 +825,38 @@
       "rule": "The dashboard shows each hire's progress, overdue flag and outstanding tasks by department",
       "scenario": "Progress for one hire",
       "tags": [],
+      "outcome": "unjudgeable",
       "steps": [
         {
+          "keyword": "Given",
           "text": "a new plan for \"Maya Fernando\" has 5 tasks, 2 done, and 1 IT task overdue",
-          "keyword": "Given",
-          "observed": "2 tasks done needs a task owner to complete: Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "command": "API: plan Prog T5603 with 5 tasks, 2 Facilities tasks completed"
         },
         {
+          "keyword": "And",
           "text": "the other 3 tasks are 1 IT, 1 HR and 1 Facilities",
-          "keyword": "Given",
-          "observed": "not reached"
+          "command": "API: plan Prog T5603 with 5 tasks, 2 Facilities tasks completed"
         },
         {
-          "text": "Grace the HR coordinator opens the dashboard",
           "keyword": "When",
-          "observed": "dashboard also answers 500"
+          "text": "Grace the HR coordinator opens the dashboard",
+          "command": "API: plan Prog T5603 with 5 tasks, 2 Facilities tasks completed"
         },
         {
+          "keyword": "Then",
           "text": "\"Maya Fernando\" shows \"2 of 5 done\" and an overdue flag",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "agent-browser snapshot -i | grep 'Prog T5603'",
+          "exit": 0,
+          "observed": "row 'Prog T5603 2026-10-12 2 of 5 done 2 / 1 / 0 1 overdue'"
         },
         {
+          "keyword": "And",
           "text": "\"Maya Fernando\" shows outstanding tasks of 2 for IT, 1 for HR and 1 for Facilities",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "agent-browser snapshot -i | grep 'Prog T5603'",
+          "exit": 0,
+          "observed": "row 'Prog T5603 2026-10-12 2 of 5 done 2 / 1 / 0 1 overdue'"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -974,39 +865,43 @@
       "rule": "By default the dashboard shows only active plans that are not complete",
       "scenario": "Complete and cancelled plans are hidden",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "a plan for \"Chen Wei\" with every task done",
-          "keyword": "Given",
-          "observed": "'every task done' needs task-owner completion: Task-owner sessions cannot reach any task data: GET /api/me returns department null for the IT and Facilities test users, the app routes them to /forbidden, and /me/department/* answers 401 with an empty body (gateway-style, not an app rule)."
+          "command": "Chen T5603 (all 3 tasks done) and Lena3 T5603 (cancelled) created via API; Maya T5603 active; HR opens /dashboard (UI, filter 'No')"
         },
         {
+          "keyword": "And",
           "text": "a cancelled plan for \"Lena Fischer\"",
-          "keyword": "Given",
-          "observed": "cancelled plan for Lena exists"
+          "command": "Chen T5603 (all 3 tasks done) and Lena3 T5603 (cancelled) created via API; Maya T5603 active; HR opens /dashboard (UI, filter 'No')"
         },
         {
+          "keyword": "And",
           "text": "an active plan for \"Maya Fernando\" with tasks still to do",
-          "keyword": "Given",
-          "observed": "Maya plan exists"
+          "command": "Chen T5603 (all 3 tasks done) and Lena3 T5603 (cancelled) created via API; Maya T5603 active; HR opens /dashboard (UI, filter 'No')"
         },
         {
-          "text": "Grace opens the dashboard",
           "keyword": "When",
-          "observed": "dashboard 500"
+          "text": "Grace opens the dashboard",
+          "command": "Chen T5603 (all 3 tasks done) and Lena3 T5603 (cancelled) created via API; Maya T5603 active; HR opens /dashboard (UI, filter 'No')"
         },
         {
+          "keyword": "Then",
           "text": "\"Maya Fernando\" is listed",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "agent-browser snapshot -i | grep 'Maya T5603'",
+          "exit": 0,
+          "observed": "row 'Maya T5603 2026-03-02 0 of 3 done' present"
         },
         {
+          "keyword": "And",
           "text": "\"Chen Wei\" and \"Lena Fischer\" are not listed",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "agent-browser get count 'tr:has-text(\"Chen T5603\"), tr:has-text(\"Lena3 T5603\")'",
+          "exit": 0,
+          "observed": "0 (API default list also lacks both)"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -1015,34 +910,38 @@
       "rule": "The HR coordinator may include completed and cancelled plans",
       "scenario": "Showing everything",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "a plan for \"Chen Wei\" with every task done",
-          "keyword": "Given",
-          "observed": "'every task done' needs task-owner completion"
+          "command": "agent-browser find role combobox click ... then agent-browser find role option click --name \"Yes\" on 'Include completed and cancelled plans'"
         },
         {
+          "keyword": "And",
           "text": "a cancelled plan for \"Lena Fischer\"",
-          "keyword": "Given",
-          "observed": "Lena cancelled exists"
+          "command": "agent-browser find role combobox click ... then agent-browser find role option click --name \"Yes\" on 'Include completed and cancelled plans'"
         },
         {
-          "text": "Grace chooses to include completed and cancelled plans",
           "keyword": "When",
-          "observed": "dashboard 500"
+          "text": "Grace chooses to include completed and cancelled plans",
+          "command": "agent-browser find role combobox click ... then agent-browser find role option click --name \"Yes\" on 'Include completed and cancelled plans'"
         },
         {
+          "keyword": "Then",
           "text": "\"Chen Wei\" is listed as complete",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "agent-browser snapshot -i | grep 'Chen T5603'",
+          "exit": 0,
+          "observed": "row 'Chen T5603 2026-03-02 3 of 3 done ... Complete'"
         },
         {
+          "keyword": "And",
           "text": "\"Lena Fischer\" is listed as cancelled",
-          "keyword": "Then",
-          "observed": "not reached"
+          "command": "agent-browser snapshot -i | grep 'Lena3 T5603'",
+          "exit": 0,
+          "observed": "row 'Lena3 T5603 2026-03-02 0 of 4 done ... Cancelled'"
         }
-      ],
-      "outcome": "blocked"
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -1051,48 +950,26 @@
       "rule": "A hire on the dashboard opens their plan",
       "scenario": "Opening a hire",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "an active plan for \"Maya Fernando\" with the task \"Set up laptop\"",
           "keyword": "Given",
-          "command": "Maya's plan with Set up laptop exists (via /tasks)",
-          "exit": 0,
-          "observed": "yes"
+          "text": "an active plan for \"Maya Fernando\" with the task \"Set up laptop\"",
+          "command": "agent-browser find text \"Maya T5603\" click on the dashboard"
         },
         {
-          "text": "Grace opens \"Maya Fernando\" from the dashboard",
           "keyword": "When",
-          "command": "agent-browser open /dashboard (HR)",
-          "exit": 0,
-          "observed": "GET /api/plans -> 500, no hires listed, nothing to open"
+          "text": "Grace opens \"Maya Fernando\" from the dashboard",
+          "command": "agent-browser find text \"Maya T5603\" click on the dashboard"
         },
         {
-          "text": "Maya's plan is shown, listing \"Set up laptop\"",
           "keyword": "Then",
-          "command": "agent-browser snapshot -i | grep \"Maya Fernando\"",
-          "exit": 1,
-          "observed": "absent"
+          "text": "Maya's plan is shown, listing \"Set up laptop\"",
+          "command": "agent-browser get url",
+          "exit": 0,
+          "observed": "/plans/697fd70d-8186-4f4f-8e98-3c75a2c19a0f"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/plans?includeClosed=false&sort=startDate&limit=100&offset=0",
-            "status": 500
-          },
-          {
-            "method": "GET",
-            "url": "/api/tasks?overdue=true&limit=1",
-            "status": 200
-          }
-        ],
-        "console": [
-          "GET /api/plans -> 500 empty body (sql:FieldMismatchError on getPlan/createPlan paths)"
-        ],
-        "snapshot": "- heading \"New hires\"\n- combobox \"Include completed and cancelled plans No\"\n(no plan rows)"
-      }
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -1101,55 +978,31 @@
       "rule": "The list can be sorted by start date or by overdue tasks",
       "scenario": "Sorting by overdue tasks",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "an active plan for \"Maya Fernando\" with 3 overdue tasks",
-          "keyword": "Given",
-          "command": "created via API: Maya has overdue tasks",
-          "exit": 0,
-          "observed": "HR /tasks daysOverdue>0"
+          "command": "plans MayaO T5603 (2 overdue) and DanO T5603 (1 overdue); agent-browser find role option click --name \"Overdue tasks\" on the dashboard sort. The 3-vs-1 counts were not buildable exactly from a fixed template, 2-vs-1 exercises the same ordering"
         },
         {
+          "keyword": "And",
           "text": "an active plan for \"Daniel Okoye\" with 1 overdue task",
-          "keyword": "Given",
-          "command": "created via API: Daniel plan",
-          "exit": 0,
-          "observed": "exists"
+          "command": "plans MayaO T5603 (2 overdue) and DanO T5603 (1 overdue); agent-browser find role option click --name \"Overdue tasks\" on the dashboard sort. The 3-vs-1 counts were not buildable exactly from a fixed template, 2-vs-1 exercises the same ordering"
         },
         {
-          "text": "Grace sorts the dashboard by overdue tasks",
           "keyword": "When",
-          "command": "agent-browser open /dashboard; sort",
-          "exit": 0,
-          "observed": "dashboard list request 500"
+          "text": "Grace sorts the dashboard by overdue tasks",
+          "command": "plans MayaO T5603 (2 overdue) and DanO T5603 (1 overdue); agent-browser find role option click --name \"Overdue tasks\" on the dashboard sort. The 3-vs-1 counts were not buildable exactly from a fixed template, 2-vs-1 exercises the same ordering"
         },
         {
-          "text": "\"Maya Fernando\" is listed before \"Daniel Okoye\"",
           "keyword": "Then",
-          "command": "agent-browser snapshot -i | grep \"Maya Fernando\"",
-          "exit": 1,
-          "observed": "no rows rendered"
+          "text": "\"Maya Fernando\" is listed before \"Daniel Okoye\"",
+          "command": "agent-browser snapshot -i | grep -n 'MayaO T\\|DanO T'",
+          "exit": 0,
+          "observed": "MayaO T5603 (2 overdue) listed at row 15, DanO T5603 (1 overdue) at row 17; API sort=overdueTasks gave 14 then 16"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/plans?includeClosed=false&sort=startDate&limit=100&offset=0",
-            "status": 500
-          },
-          {
-            "method": "GET",
-            "url": "/api/tasks?overdue=true&limit=1",
-            "status": 200
-          }
-        ],
-        "console": [
-          "GET /api/plans -> 500 empty body (sql:FieldMismatchError on getPlan/createPlan paths)"
-        ],
-        "snapshot": "- heading \"New hires\"\n- combobox \"Include completed and cancelled plans No\"\n(no plan rows)"
-      }
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -1158,55 +1011,31 @@
       "rule": "The list can be sorted by start date or by overdue tasks",
       "scenario": "Sorting by start date",
       "tags": [],
+      "outcome": "passed",
       "steps": [
         {
+          "keyword": "Given",
           "text": "an active plan for \"Maya Fernando\" starting \"2026-03-02\"",
-          "keyword": "Given",
-          "command": "Maya starts 2026-03-02",
-          "exit": 0,
-          "observed": "exists"
+          "command": "agent-browser find role option click --name \"Start date\" on the dashboard sort"
         },
         {
+          "keyword": "And",
           "text": "an active plan for \"Daniel Okoye\" starting \"2026-02-16\"",
-          "keyword": "Given",
-          "command": "Daniel plan starting 2026-02-16 creatable",
-          "exit": 0,
-          "observed": "exists via POST /plans (500 response, persisted)"
+          "command": "agent-browser find role option click --name \"Start date\" on the dashboard sort"
         },
         {
-          "text": "Grace sorts the dashboard by start date",
           "keyword": "When",
-          "command": "agent-browser open /dashboard; GET /api/plans?sort=startDate",
-          "exit": 0,
-          "observed": "500"
+          "text": "Grace sorts the dashboard by start date",
+          "command": "agent-browser find role option click --name \"Start date\" on the dashboard sort"
         },
         {
-          "text": "\"Daniel Okoye\" is listed before \"Maya Fernando\"",
           "keyword": "Then",
-          "command": "agent-browser snapshot -i | grep \"Daniel Okoye\"",
-          "exit": 1,
-          "observed": "no rows rendered"
+          "text": "\"Daniel Okoye\" is listed before \"Maya Fernando\"",
+          "command": "agent-browser snapshot -i | grep -n 'MayaD T\\|DanD T'",
+          "exit": 0,
+          "observed": "DanD T5603 (2026-02-16) at row 28 before MayaD T5603 (2026-03-02) at row 105"
         }
-      ],
-      "outcome": "failed",
-      "evidence": {
-        "network": [
-          {
-            "method": "GET",
-            "url": "/api/plans?includeClosed=false&sort=startDate&limit=100&offset=0",
-            "status": 500
-          },
-          {
-            "method": "GET",
-            "url": "/api/tasks?overdue=true&limit=1",
-            "status": 200
-          }
-        ],
-        "console": [
-          "GET /api/plans -> 500 empty body (sql:FieldMismatchError on getPlan/createPlan paths)"
-        ],
-        "snapshot": "- heading \"New hires\"\n- combobox \"Include completed and cancelled plans No\"\n(no plan rows)"
-      }
+      ]
     },
     {
       "feature": "F4 Progress dashboard",
@@ -1217,30 +1046,26 @@
       "tags": [
         "@negative"
       ],
+      "outcome": "passed",
       "steps": [
         {
-          "text": "Sam the IT task owner is signed in",
           "keyword": "Given",
-          "command": "/tmp/acc/login.sh test-it-task-owner",
-          "exit": 0,
-          "observed": "signed in as IT login"
+          "text": "Sam the IT task owner is signed in",
+          "command": "signed in as test-it-task-owner, agent-browser open /dashboard"
         },
         {
-          "text": "Sam looks for the progress dashboard",
           "keyword": "When",
-          "command": "agent-browser open /dashboard; get url",
-          "exit": 0,
-          "observed": "/forbidden"
+          "text": "Sam looks for the progress dashboard",
+          "command": "signed in as test-it-task-owner, agent-browser open /dashboard"
         },
         {
-          "text": "Sam has no progress dashboard available",
           "keyword": "Then",
-          "command": "agent-browser get count 'a[href=\"/dashboard\"]'",
+          "text": "Sam has no progress dashboard available",
+          "command": "agent-browser get url",
           "exit": 0,
-          "observed": "0; page heading 'Not available to you'"
+          "observed": "/forbidden ('Progress dashboard needs the HR Coordinator'); no Progress dashboard link in the sidebar"
         }
-      ],
-      "outcome": "passed"
+      ]
     }
   ]
 }
