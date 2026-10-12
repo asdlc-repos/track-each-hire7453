@@ -13,16 +13,20 @@ import { CallbackPage } from "./pages/Callback";
 import { AccountPage } from "./pages/Account";
 import { SignedOutPage } from "./pages/SignedOut";
 import { PlaceholderPage } from "./pages/Placeholder";
+import { PlansPage } from "./pages/Plans";
+import { PlanNewPage } from "./pages/PlanNew";
+import { PlanDetailPage } from "./pages/PlanDetail";
+import { TemplatePage } from "./pages/Template";
 
 /** Pages by screen key. Later items replace the placeholders one by one. */
 const PAGE_BY_KEY: Record<string, ReactElement> = {
   dashboard: <PlaceholderPage screenKey="dashboard" />,
-  plans: <PlaceholderPage screenKey="plans" />,
+  plans: <PlansPage />,
   overdue: <PlaceholderPage screenKey="overdue" />,
-  template: <PlaceholderPage screenKey="template" />,
+  template: <TemplatePage />,
   "my-tasks": <PlaceholderPage screenKey="my-tasks" />,
-  "plan-new": <PlaceholderPage screenKey="plan-new" />,
-  "plan-detail": <PlaceholderPage screenKey="plan-detail" />,
+  "plan-new": <PlanNewPage />,
+  "plan-detail": <PlanDetailPage />,
   "task-detail": <PlaceholderPage screenKey="task-detail" />,
   account: <AccountPage />,
   "signed-out": <SignedOutPage />,
