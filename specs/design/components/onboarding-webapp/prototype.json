@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 3,
+  "name": "New Hire Onboarding Tracker",
+  "entryScreen": "screen.dashboard",
+  "roles": [
+    { "id": "HR Coordinator", "name": "HR coordinator" },
+    { "id": "IT Task Owner", "name": "IT task owner" },
+    { "id": "HR Task Owner", "name": "HR task owner" },
+    { "id": "Facilities Task Owner", "name": "Facilities task owner" }
+  ],
+  "states": [
+    { "id": "state.default", "name": "Default" },
+    { "id": "state.empty", "name": "Nothing to show" },
+    { "id": "state.validation-error", "name": "Validation errors" },
+    { "id": "state.failed", "name": "Loading failed" }
+  ],
+  "screens": [
+    { "id": "screen.dashboard", "name": "Progress dashboard", "roleIds": ["HR Coordinator"] },
+    { "id": "screen.plans", "name": "Onboarding plans", "roleIds": ["HR Coordinator"] },
+    { "id": "screen.plan-new", "name": "New onboarding plan", "roleIds": ["HR Coordinator"] },
+    { "id": "screen.plan-detail", "name": "Onboarding plan", "roleIds": ["HR Coordinator"] },
+    { "id": "screen.template", "name": "Checklist template", "roleIds": ["HR Coordinator"] },
+    { "id": "screen.overdue", "name": "Overdue tasks", "roleIds": ["HR Coordinator"] },
+    { "id": "screen.my-tasks", "name": "My department's tasks", "roleIds": ["IT Task Owner", "HR Task Owner", "Facilities Task Owner"] },
+    { "id": "screen.task-detail", "name": "Task", "roleIds": ["IT Task Owner", "HR Task Owner", "Facilities Task Owner"] },
+    { "id": "screen.account", "name": "Account", "roleIds": ["HR Coordinator", "IT Task Owner", "HR Task Owner", "Facilities Task Owner"] },
+    { "id": "screen.signed-out", "name": "Signed out", "roleIds": ["HR Coordinator", "IT Task Owner", "HR Task Owner", "Facilities Task Owner"] }
+  ],
+  "flows": [
+    { "id": "flow.create-plan", "name": "Create an onboarding plan", "roleId": "HR Coordinator",
+      "screenIds": ["screen.plans", "screen.plan-new", "screen.plan-detail"] },
+    { "id": "flow.adjust-plan", "name": "Adjust or cancel a plan", "roleId": "HR Coordinator",
+      "screenIds": ["screen.plans", "screen.plan-detail"] },
+    { "id": "flow.edit-template", "name": "Edit the standard checklist", "roleId": "HR Coordinator",
+      "screenIds": ["screen.template"] },
+    { "id": "flow.follow-progress", "name": "Follow hires' progress", "roleId": "HR Coordinator",
+      "screenIds": ["screen.dashboard", "screen.plan-detail"] },
+    { "id": "flow.chase-overdue", "name": "Chase overdue tasks", "roleId": "HR Coordinator",
+      "screenIds": ["screen.overdue", "screen.plan-detail"] },
+    { "id": "flow.it-tasks", "name": "Work IT tasks", "roleId": "IT Task Owner",
+      "screenIds": ["screen.my-tasks", "screen.task-detail"] },
+    { "id": "flow.hr-tasks", "name": "Work HR tasks", "roleId": "HR Task Owner",
+      "screenIds": ["screen.my-tasks", "screen.task-detail"] },
+    { "id": "flow.facilities-tasks", "name": "Work facilities tasks", "roleId": "Facilities Task Owner",
+      "screenIds": ["screen.my-tasks", "screen.task-detail"] }
+  ]
+}
