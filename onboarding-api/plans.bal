@@ -139,7 +139,9 @@ function pageLinks(string path, string extra, int 'limit, int offset, int total)
 
 // ---------------------------------------------------------------- plans
 
-function planSelect() returns sql:ParameterizedQuery => `SELECT * FROM (
+function planSelect() returns sql:ParameterizedQuery => `SELECT s.id, s."hireName", s."jobTitle", s.department,
+    s."managerName", s."startDate", s.status, s."totalTasks", s."doneTasks", s."overdueTasks",
+    s."itOpen", s."hrOpen", s."facilitiesOpen" FROM (
     SELECT p.id, p.hire_name AS "hireName", p.job_title AS "jobTitle", p.department,
         p.manager_name AS "managerName", to_char(p.start_date, 'YYYY-MM-DD') AS "startDate", p.status,
         (SELECT count(*) FROM plan_tasks t WHERE t.plan_id = p.id) AS "totalTasks",
