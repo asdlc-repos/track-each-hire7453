@@ -33,17 +33,28 @@ function callerProfile(http:Request req, GatewayCaller caller) returns CallerPro
     string username = caller.username == "" ? caller.userId : caller.username;
     string displayName = username;
     Department? department = ();
-    string|http:HeaderNotFoundError raw = req.getHeader(assertionHeader);
-    if raw is string {
-        string token = raw.trim();
-        if token.length() > 7 && token.substring(0, 7).toLowerAscii() == "bearer " {
-            token = token.substring(7).trim();
+    // The assertion may not carry the groups claim; the gateway-validated token it
+    // forwards does. Groups only pick which department's rows are shown.
+    foreach string header in [assertionHeader, DEFAULT_FORWARDED_TOKEN_HEADER] {
+        string|http:HeaderNotFoundError raw = req.getHeader(header);
+        if raw is string {
+            string token = raw.trim();
+            if token.length() > 7 && token.substring(0, 7).toLowerAscii() == "bearer " {
+                token = token.substring(7).trim();
+            }
+            [jwt:Header, jwt:Payload]|jwt:Error decoded = jwt:decode(token);
+            if decoded is [jwt:Header, jwt:Payload] {
+                jwt:Payload payload = decoded[1];
+                if displayName == username {
+                    displayName = nameFromClaims(payload, username);
+                }
+                if department is () {
+                    department = departmentFromGroups(groupsFromClaims(payload));
+                }
+            }
         }
-        [jwt:Header, jwt:Payload]|jwt:Error decoded = jwt:decode(token);
-        if decoded is [jwt:Header, jwt:Payload] {
-            jwt:Payload payload = decoded[1];
-            displayName = nameFromClaims(payload, username);
-            department = departmentFromGroups(groupsFromClaims(payload));
+        if department is Department {
+            break;
         }
     }
     return {username, displayName, department};
