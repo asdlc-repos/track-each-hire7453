@@ -12,7 +12,7 @@ import { GateLayout } from "./shell/GateLayout";
 import { CallbackPage } from "./pages/Callback";
 import { AccountPage } from "./pages/Account";
 import { SignedOutPage } from "./pages/SignedOut";
-import { PlaceholderPage } from "./pages/Placeholder";
+import { DashboardPage } from "./pages/Dashboard";
 import { OverduePage } from "./pages/Overdue";
 import { PlansPage } from "./pages/Plans";
 import { PlanNewPage } from "./pages/PlanNew";
@@ -23,7 +23,7 @@ import { TemplatePage } from "./pages/Template";
 
 /** Pages by screen key. Later items replace the placeholders one by one. */
 const PAGE_BY_KEY: Record<string, ReactElement> = {
-  dashboard: <PlaceholderPage screenKey="dashboard" />,
+  dashboard: <DashboardPage />,
   plans: <PlansPage />,
   overdue: <OverduePage />,
   template: <TemplatePage />,

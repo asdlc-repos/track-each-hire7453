@@ -136,7 +136,8 @@ function summarize(plan: Plan): PlanSummary {
     ...plan,
     totalTasks: mine.length,
     doneTasks: mine.length - open.length,
-    overdueTasks: open.filter((t) => t.daysOverdue > 0).length,
+    // Overdue is only for tasks of active plans (F3), so a cancelled plan reports none.
+    overdueTasks: plan.status === "active" ? open.filter((t) => t.daysOverdue > 0).length : 0,
     outstandingByDepartment: { IT: count("IT"), HR: count("HR"), Facilities: count("Facilities") },
     complete: mine.length > 0 && open.length === 0,
   };
@@ -248,7 +249,7 @@ export const handlers = [
     const includeClosed = url.searchParams.get("includeClosed") === "true";
     let list = plans.map(summarize).filter((s) => includeClosed || (s.status === "active" && !s.complete));
     list = url.searchParams.get("sort") === "overdueTasks"
-      ? list.sort((a, b) => b.overdueTasks - a.overdueTasks)
+      ? list.sort((a, b) => b.overdueTasks - a.overdueTasks || a.startDate.localeCompare(b.startDate))
       : list.sort((a, b) => a.startDate.localeCompare(b.startDate));
     return HttpResponse.json(page(url, list));
   }),
